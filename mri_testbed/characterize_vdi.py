@@ -1,37 +1,46 @@
-## Will perform a rough antenna characterization using KeySight DSO FFT averaging
-## and Thorlabs HDR50 rotator stage
+# v0.1
 
-# Requires: pythonnet, pyvisa (install with pip)
+# This program serves to automatically profile VDI modules by controlling various components:
+## A Thorlabs HDR50 rotator stage connected to a BSC201 controller positions the TX antenna
+##  - The stage is controlled using the Thorlabs provided .NET libraries via the pythonnet package
+## A Keysight DSOV254A oscilloscope captures received waveforms
+##  - The oscilloscope is controlled using the VISA standard via the pyvisa package
+## The captured waveforms are analyzed using various MATLAB code
+##   - Data is send to matlab via the matlab engine for python
 
-# May require:
-# https://www.keysight.com/zz/en/lib/software-detail/computer-software/io-libraries-suite-downloads-2175637.html
+# Requires:
+# pythonnet, pyvisa (install with pip)
+# MATLAB Engine API for Python: https://www.mathworks.com/help/matlab/matlab_external/install-the-matlab-engine-for-python.html
+# KeySight IOLS: https://www.keysight.com/zz/en/lib/software-detail/computer-software/io-libraries-suite-downloads-2175637.html
 # Thorlabs Kinesis ~
 # (all relevant .dlls should be included in this repo)
 
-# v0.1
 
 # import python modules
 import atexit
+import csv
+import math
+import matlab.engine
+import matplotlib.pyplot as plot
+import os
 import pyvisa
 import sys
-import os
 import time
 
 # load .net assemblies
 # sys.path.append()  # os.getcwd()
-sys.path.append("C:\\Program Files\\Thorlabs\\Kinesis")
+sys.path.append(0, "C:\\Program Files\\Thorlabs\\Kinesis")
+sys.path.append(0, os.path.dirname(__file__))
 import clr
 
 print(sys.path)  # TODO: fix path issues for AddReference
 
-# clr.AddReference("Thorlabs.MotionControl.Benchtop.StepperMotorCLI")
+clr.AddReference("Thorlabs.MotionControl.Benchtop.StepperMotorCLI")
 # clr.AddReference("Thorlabs.MotionControl.Benchtop.StepperMotorUI")
 # clr.AddReference("Thorlabs.MotionControl.DeviceManagerCLI")
 # clr.AddReference("Thorlabs.MotionControl.GenericMotorCLI")
 
-clr.AddReference(
-    "C:\\Program Files\\Thorlabs\\Kinesis\\Thorlabs.MotionControl.Benchtop.StepperMotorCLI"
-)
+# clr.AddReference(r"C:\Program Files\Thorlabs\Kinesis\Thorlabs.MotionControl.Benchtop.StepperMotorCLI")
 clr.AddReference(
     "C:\\Program Files\\Thorlabs\\Kinesis\\Thorlabs.MotionControl.Benchtop.StepperMotorUI"
 )
@@ -48,67 +57,115 @@ import System.Threading
 from Thorlabs.MotionControl.Benchtop.StepperMotorCLI import *
 from Thorlabs.MotionControl.DeviceManagerCLI import *
 from Thorlabs.MotionControl.GenericMotorCLI import *
+import Thorlabs.MotionControl.GenericMotorCLI.Settings
 
+
+################################################################################################
+################################################################################################
 
 # Global Variables
 serial_num = "40163084"
 visa_address = "USB0::0x2A8D::0x9027::MY59190106::0::INSTR"
+destination_filename = "300ghz_rx_data_full.csv"
 
-starting_angle = 315  # "home" - Should result in 0 degree actual angle for DUT
-span = 90  # how far stage will rotate for the test
+zero_offset = 315  # stage position that results in 0 degree actual angle for DUT
+starting_angle = 0  # where the test should begin
+span = 105  # how far stage will rotate for the test
 ending_angle = starting_angle - span
-rotate_direction = MotorDirection.Backward
-
-averaging_time = 5  # how long to wait for DSO to average before recording value
+step_size = 1  # how many degrees between each sample point
+averaging_time = 20  # how long to wait for DSO to average before recording value
 debug = False
 
 
 def main():
+    # Initialize rotation stage
+    stage = Kinesis(serial_num)
+
+    # Initialize DSO
     rm = pyvisa.ResourceManager(r"C:\WINDOWS\system32\visa64.dll")
     scope = Infiniium(rm.open_resource(visa_address))
 
-    stage = Kinesis(serial_num)
-
-    result = scope.do_query(":FUNCtion3:FFT:PEAK:LEVel?")
-    print(f"Scope will measure all RF peaks above {result}")
-
-    ## Begin work
     print('Actuator is "Homing"')
     print(f"Start position: {starting_angle} (absolute)")
     stage.move_to(starting_angle)
-    if (pos := stage.get_angle()) != starting_angle:
+    if pos := stage.get_angle() != starting_angle:
         print(
             f"Error homing stage. Desired angle: {starting_angle}  measured angle: {pos}"
         )
+        exit()
     else:
         print("Stage is homed")
+        print(f"Test will take {span / step_size * 20 / 60} minutes to complete.")
         input("Press any key to begin")
+
+    data = []
+    expect_peak = False
 
     current_pos = stage.get_angle()
     while current_pos > ending_angle:
-        print(f"Stage position: {current_pos} degrees")
+        print(
+            f"Stage position: {current_pos} (real) {current_pos - zero_offset} (test)"
+        )
         time.sleep(averaging_time)
 
-        power = scope.do_query(":FUNCtion3:FFT:PEAK:MAGNitude?")
+        power = scope.get_fft_peak()
         print(f"Power level: {power} dBm")
 
+        if power == "-9.99999E+37":
+            if expect_peak:
+                print("Scope did not measure a peak. Ending test.")
+                break
+        elif not expect_peak:
+            expect_peak = True
+
+        data.append((current_pos - zero_offset, power))
+
+        # TODO: make sure peak is at correct frequency
+
         print("Stage is moving")
-        stage.move_to(
-            current_pos - 0.5
-        )  # this could be very dangerous. make sure move direction is correct (do not wrap coax)
+        # Be very careful when moving the stage to not wrap coax
+        stage.move_to(current_pos - step_size)
         current_pos = stage.get_angle()
 
+    print(f"writing data to {destination_filename}")
+    with open(destination_filename, "w", newline="") as csvfile:
+        csvwriter = csv.writer(csvfile)
+        for row in data:
+            csvwriter.writerow(row)
+    print("Test complete.")
 
-##########################################################################
+
+def plot_polar(data):
+    pass
+
+
+def deg_to_rad(deg):
+    return deg * (math.pi / 180)
+
+
+def normalize_power(power_data):
+    pmax = max(power_data)
+    power_rat = []
+    for p in power_data:
+        powernorm = p - pmax  # normalize max power to 0dB
+        prat = 10 ** (powernorm / 20)  # convert dB to ratio
+        power_rat.append(prat)
+    return power_rat
+
+
+################################################################################################
+################################################################################################
 
 
 class Kinesis:
     def __init__(self, serial_number):
         atexit.register(self.shutdown)
         # SimulationManager.Instance.InitializeSimulations() # only needed if using Kinesis simulator
-        # DeviceManagerCLI.BuildDeviceList() # unecessary?
+
+        DeviceManagerCLI.BuildDeviceList()
 
         self.device = BenchtopStepperMotor.CreateBenchtopStepperMotor(serial_number)
+        print(self.device)
         self.device.Connect(serial_number)
         # Thorlabs::MotionControl::Benchtop::StepperMotorCLI::StepperMotorChannel
         # inherits GenericAdvancedMotorCLI
@@ -134,15 +191,15 @@ class Kinesis:
         print(f"Poisition calibrated? {self.channel.IsPositionCalibrated}")
         self.channel.SetBacklash(System.Decimal(0))
 
-        settings = ThorlabsBenchtopStepperMotorSettings
-        self.channel.GetSettings(settings)
-        settings.Limit.CCWSoftLimitUnit = System.Decimal(90)
-        settings.Limit.CCWSoftLimitUnit = System.Decimal(0)
-        self.channel.SetSettings(settings, False)
+        # settings = ThorlabsBenchtopStepperMotorSettings
+        # self.channel.GetSettings(settings) #Object of type 'System.RuntimeType' cannot be converted to type 'Thorlabs.MotionControl.DeviceManagerCLI.DeviceSettings'.
+        # settings.Limit.CCWSoftLimitUnit = System.Decimal(90)
+        # settings.Limit.CCWSoftLimitUnit = System.Decimal(0)
+        # self.channel.SetSettings(settings, False)
 
         self.channel.SetRotationModes(
-            RotationSettings.RotationModes.RotationalRange,
-            RotationSettings.RotationDirections.Quickest,
+            Thorlabs.MotionControl.GenericMotorCLI.Settings.RotationSettings.RotationModes.RotationalRange,
+            Thorlabs.MotionControl.GenericMotorCLI.Settings.RotationSettings.RotationDirections.Quickest,
         )
 
     def shutdown(self):
@@ -150,10 +207,13 @@ class Kinesis:
         self.device.ShutDown()
 
     def get_angle(self):
-        return self.channel.Position
+        angle = self.channel.Position
+        return float(angle.ToString())  # dirty type conversion
         # TODO real angle
 
     def move_to(self, angle):
+        if angle < 0:
+            angle = angle + 360
         self.channel.MoveTo(System.Decimal(angle), 60000)
 
 
@@ -173,6 +233,12 @@ class Infiniium:
 
     def shutdown(self):
         self.infiniium.close()
+
+    def get_fft_peak(self):
+        power = self.do_query(":FUNCtion3:FFT:PEAK:MAGNitude?")
+        if "9.99999E+37" in power:
+            power = "-9.99999E+37"
+        return power
 
     def do_command(self, command, hide_params=False):
         if hide_params:
