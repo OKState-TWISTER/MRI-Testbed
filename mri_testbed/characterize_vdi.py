@@ -1,4 +1,4 @@
-# v0.1
+# v0.2
 
 # This program serves to automatically profile VDI modules by controlling various components:
 ## A Thorlabs HDR50 rotator stage connected to a BSC201 controller positions the TX antenna
@@ -19,9 +19,10 @@
 # import python modules
 import atexit
 import csv
+import datetime
 import math
-import matlab.engine
-import matplotlib.pyplot as plot
+#import matlab.engine
+from matplotlib.pyplot import plot, ion, draw, show
 import os
 import pyvisa
 import sys
@@ -29,18 +30,18 @@ import time
 
 # load .net assemblies
 # sys.path.append()  # os.getcwd()
-sys.path.append(0, "C:\\Program Files\\Thorlabs\\Kinesis")
-sys.path.append(0, os.path.dirname(__file__))
+sys.path.append("C:\\Program Files\\Thorlabs\\Kinesis")
+sys.path.append(os.path.dirname(__file__))
 import clr
 
 print(sys.path)  # TODO: fix path issues for AddReference
 
-clr.AddReference("Thorlabs.MotionControl.Benchtop.StepperMotorCLI")
+#clr.AddReference("Thorlabs.MotionControl.Benchtop.StepperMotorCLI")
 # clr.AddReference("Thorlabs.MotionControl.Benchtop.StepperMotorUI")
 # clr.AddReference("Thorlabs.MotionControl.DeviceManagerCLI")
 # clr.AddReference("Thorlabs.MotionControl.GenericMotorCLI")
 
-# clr.AddReference(r"C:\Program Files\Thorlabs\Kinesis\Thorlabs.MotionControl.Benchtop.StepperMotorCLI")
+clr.AddReference(r"C:\Program Files\Thorlabs\Kinesis\Thorlabs.MotionControl.Benchtop.StepperMotorCLI")
 clr.AddReference(
     "C:\\Program Files\\Thorlabs\\Kinesis\\Thorlabs.MotionControl.Benchtop.StepperMotorUI"
 )
@@ -64,9 +65,10 @@ import Thorlabs.MotionControl.GenericMotorCLI.Settings
 ################################################################################################
 
 # Global Variables
+date_time = datetime.datetime.now().strftime("%d%m%Y_%H%M%S")
 serial_num = "40163084"
 visa_address = "USB0::0x2A8D::0x9027::MY59190106::0::INSTR"
-destination_filename = "300ghz_rx_data_full.csv"
+destination_filename = f"300ghz_rx_data_full_{date_time}.csv"
 
 zero_offset = 315  # stage position that results in 0 degree actual angle for DUT
 starting_angle = 0  # where the test should begin
@@ -98,8 +100,10 @@ def main():
         print(f"Test will take {span / step_size * 20 / 60} minutes to complete.")
         input("Press any key to begin")
 
-    data = []
+    data = [[], []]
     expect_peak = False
+
+    #fig, axis = matplotlib.pyplot.subplots(subplot_kw={"projection": "polar"})
 
     current_pos = stage.get_angle()
     while current_pos > ending_angle:
@@ -108,17 +112,21 @@ def main():
         )
         time.sleep(averaging_time)
 
-        power = scope.get_fft_peak()
+        spower = scope.get_fft_peak().strip().replace('"', '')
+        print(spower)
+        power = float(spower)
         print(f"Power level: {power} dBm")
 
-        if power == "-9.99999E+37":
+        if power == float("-9.99999E+37"):
             if expect_peak:
                 print("Scope did not measure a peak. Ending test.")
                 break
         elif not expect_peak:
             expect_peak = True
 
-        data.append((current_pos - zero_offset, power))
+        data[0].append(current_pos - zero_offset)
+        data[1].append(power)
+        #plot_polar(fig, axis, data)
 
         # TODO: make sure peak is at correct frequency
 
@@ -127,20 +135,33 @@ def main():
         stage.move_to(current_pos - step_size)
         current_pos = stage.get_angle()
 
+    show()
+
     print(f"writing data to {destination_filename}")
     with open(destination_filename, "w", newline="") as csvfile:
         csvwriter = csv.writer(csvfile)
-        for row in data:
+        for i in range(len(data[0])):
+            row = (data[0][i], data[1][i])
             csvwriter.writerow(row)
     print("Test complete.")
 
 
-def plot_polar(data):
-    pass
+def plot_polar(figure, axis, data):
+    pos_data, power_data = data
+    rad_pos = deg_to_rad(pos_data)
+    power = normalize_power(power_data)
+
+    axis.plot(rad_pos, power)
+    # axis.set_rmax(2)
+    draw()
 
 
-def deg_to_rad(deg):
-    return deg * (math.pi / 180)
+
+def deg_to_rad(deg_data):
+    rad_pos = []
+    for angle in deg_data:
+        rad_pos.append(angle * (math.pi / 180))
+    return rad_pos
 
 
 def normalize_power(power_data):
@@ -229,13 +250,13 @@ class Infiniium:
         idn_string = self.do_query("*IDN?")
         print("Identification string: '%s'" % idn_string)
         # Load saved setup #9
-        self.do_command(":RECall:SETup 9")
+        self.do_command(":RECall:SETup 8")
 
     def shutdown(self):
         self.infiniium.close()
 
     def get_fft_peak(self):
-        power = self.do_query(":FUNCtion3:FFT:PEAK:MAGNitude?")
+        power = self.do_query(":FUNCtion4:FFT:PEAK:MAGNitude?")
         if "9.99999E+37" in power:
             power = "-9.99999E+37"
         return power
