@@ -36,11 +36,6 @@ import clr
 
 print(sys.path)  # TODO: fix path issues for AddReference
 
-#clr.AddReference("Thorlabs.MotionControl.Benchtop.StepperMotorCLI")
-# clr.AddReference("Thorlabs.MotionControl.Benchtop.StepperMotorUI")
-# clr.AddReference("Thorlabs.MotionControl.DeviceManagerCLI")
-# clr.AddReference("Thorlabs.MotionControl.GenericMotorCLI")
-
 clr.AddReference(r"C:\Program Files\Thorlabs\Kinesis\Thorlabs.MotionControl.Benchtop.StepperMotorCLI")
 clr.AddReference(
     "C:\\Program Files\\Thorlabs\\Kinesis\\Thorlabs.MotionControl.Benchtop.StepperMotorUI"
@@ -65,17 +60,17 @@ import Thorlabs.MotionControl.GenericMotorCLI.Settings
 ################################################################################################
 
 # Global Variables
-date_time = datetime.datetime.now().strftime("%d%m%Y_%H%M%S")
 serial_num = "40163084"
 visa_address = "USB0::0x2A8D::0x9027::MY59190106::0::INSTR"
-destination_filename = f"300ghz_rx_data_full_{date_time}.csv"
 
-zero_offset = 315  # stage position that results in 0 degree actual angle for DUT
-starting_angle = 0  # where the test should begin
-span = 105  # how far stage will rotate for the test
-ending_angle = starting_angle - span
-step_size = 1  # how many degrees between each sample point
+date_time = datetime.datetime.now().strftime("%d%m%Y_%H%M%S")
+destination_filename = f"300ghz_data_test1.1.csv"
+
+starting_angle = 40  # where the test should begin
+ending_angle = -40
+step_size = 0.5  # how many degrees between each sample point
 averaging_time = 20  # how long to wait for DSO to average before recording value
+zero_offset = 315  # stage position that results in 0 degree actual angle for DUT (DO NOT CHANGE)
 debug = False
 
 
@@ -88,16 +83,16 @@ def main():
     scope = Infiniium(rm.open_resource(visa_address))
 
     print('Actuator is "Homing"')
-    print(f"Start position: {starting_angle} (absolute)")
-    stage.move_to(starting_angle)
-    if pos := stage.get_angle() != starting_angle:
+    print(f"Start position: {starting_angle} : {starting_angle + zero_offset} (absolute)")
+    stage.move_to(starting_angle + zero_offset)
+    if (pos := stage.get_angle()) != (starting_angle + zero_offset):
         print(
             f"Error homing stage. Desired angle: {starting_angle}  measured angle: {pos}"
         )
         exit()
     else:
         print("Stage is homed")
-        print(f"Test will take {span / step_size * 20 / 60} minutes to complete.")
+        print(f"Test will take {(starting_angle - ending_angle) / step_size * 20 / 60} minutes to complete.")
         input("Press any key to begin")
 
     data = [[], []]
@@ -106,21 +101,19 @@ def main():
     #fig, axis = matplotlib.pyplot.subplots(subplot_kw={"projection": "polar"})
 
     current_pos = stage.get_angle()
-    while current_pos > ending_angle:
+    while current_pos > (ending_angle + zero_offset):
         print(
-            f"Stage position: {current_pos} (real) {current_pos - zero_offset} (test)"
+            f"Stage position: {current_pos} (absolute) {current_pos - zero_offset} (effective)"
         )
         time.sleep(averaging_time)
 
-        spower = scope.get_fft_peak().strip().replace('"', '')
-        print(spower)
-        power = float(spower)
+        power = scope.get_fft_peak()
         print(f"Power level: {power} dBm")
 
         if power == float("-9.99999E+37"):
             if expect_peak:
                 print("Scope did not measure a peak. Ending test.")
-                break
+                #break
         elif not expect_peak:
             expect_peak = True
 
@@ -256,10 +249,10 @@ class Infiniium:
         self.infiniium.close()
 
     def get_fft_peak(self):
-        power = self.do_query(":FUNCtion4:FFT:PEAK:MAGNitude?")
+        power = self.do_query(":FUNCtion4:FFT:PEAK:MAGNitude?").strip().replace('"', '')
         if "9.99999E+37" in power:
             power = "-9.99999E+37"
-        return power
+        return float(power)
 
     def do_command(self, command, hide_params=False):
         if hide_params:
