@@ -59,6 +59,7 @@ import System.Threading
 from Thorlabs.MotionControl.Benchtop.StepperMotorCLI import *
 from Thorlabs.MotionControl.DeviceManagerCLI import *
 from Thorlabs.MotionControl.GenericMotorCLI import *
+import Thorlabs.MotionControl.GenericMotorCLI.Settings
 
 
 ################################################################################################
