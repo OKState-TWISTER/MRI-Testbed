@@ -32,6 +32,7 @@ import matplotlib.pyplot as plot
 import numpy
 import os
 import pyvisa
+import struct
 import sys
 import time
 
@@ -112,6 +113,8 @@ def main():
 
             data[0].append(current_pos - zero_offset)
             data[1].append(power)
+
+            var = scope.get_waveform()
             
             plot.update(data)
 
@@ -123,6 +126,8 @@ def main():
             current_pos = stage.get_angle()
             if current_pos > starting_angle:
                 current_pos = current_pos - 360
+
+            break # REMOVE THIS ########################################################
     except KeyboardInterrupt:
         pass
 
@@ -133,6 +138,10 @@ def main():
             row = (data[0][i], data[1][i])
             csvwriter.writerow(row)
     print("Test complete.")
+
+
+################################################################################################
+################################################################################################
 
 
 def deg_to_rad(deg_data):
@@ -151,9 +160,6 @@ def normalize_power(power_data):
         power_rat.append(prat)
     return power_rat
 
-
-################################################################################################
-################################################################################################
 
 class Custom_Plot:
     def __init__(self):
@@ -268,17 +274,82 @@ class Infiniium:
         # Get and display the device's *IDN? string.
         idn_string = self.do_query("*IDN?")
         print("Identification string: '%s'" % idn_string)
-        # Load saved setup
-        self.do_command(":RECall:SETup 8")
+
+        # Set waveform capture settings
+        self.do_command(":SYSTem:HEADer OFF")
+        self.do_command(":WAVeform:SOURce CHANnel1")
+        self.do_command(":WAVeform:STReaming OFF")
+        self.do_command(":ACQuire:MODE HRESolution")  # this may slow data acquisition down considerably
+        self.do_command(":ACQuire:COMPlete 100")  # take a full measurement
+        self.do_command(":ACQuire:POINts 1000")
 
     def shutdown(self):
         self.infiniium.close()
 
     def get_fft_peak(self):
-        power = self.do_query(":FUNCtion4:FFT:PEAK:MAGNitude?").strip().replace('"', '')
+        power = self.do_query(":FUNCtion4:FFT:PEAK:MAGNitude?").strip().replace('"', "")
         if "9.99999E+37" in power:
             power = "-9999"
         return float(power)
+
+    def get_waveform_bytes(self):
+        # Get the number of waveform points.
+        qresult = self.do_query(":WAVeform:POINts?")
+        print("Waveform points: %s" % qresult)
+
+        # Choose the format of the data returned:
+        self.do_command(":WAVeform:FORMat BYTE")
+        print("Waveform format: %s" % self.do_query(":WAVeform:FORMat?"))
+
+        # Get the waveform data.
+        self.do_command(":DIGitize CHANnel1")
+        sData = self.do_query_ieee_block(":WAVeform:DATA?")
+
+        # Unpack signed byte data.
+        values = struct.unpack("%db" % len(sData), sData)
+        print("Number of data values: %d" % len(values))
+        return values
+
+    def get_waveform_words(self):
+        # Get the number of waveform points.
+        qresult = self.do_query(":WAVeform:POINts?")
+        print("Waveform points: %s" % qresult)
+
+        # Choose the format of the data returned:
+        self.do_command(":WAVeform:FORMat WORD")
+        print("Waveform format: %s" % self.do_query(":WAVeform:FORMat?"))
+
+        # Get the waveform data.
+        self.do_command(":DIGitize CHANnel1")
+        sData = self.do_query_ieee_block(":WAVeform:DATA?")
+
+        print(f"length: {len(sData)}")
+
+        # Unpack signed byte data.
+        # values = struct.unpack("%db" % (len(sData)/1), sData)
+        values = []
+        for m, l in zip(sData[0::2], sData[1::2]):
+            values.append(int.from_bytes([m, l], byteorder="big", signed=True))
+
+        print("Number of data values: %d" % len(values))
+
+        return values
+
+    def get_waveform_ascii(self):
+        # Get the number of waveform points.
+        qresult = self.do_query(":WAVeform:POINts?")
+        print("Waveform points: %s" % qresult)
+
+        # Choose the format of the data returned:
+        self.do_command(":WAVeform:FORMat ASCii")
+        print("Waveform format: %s" % self.do_query(":WAVeform:FORMat?"))
+
+        # Get the waveform data.
+        self.do_command(":DIGitize CHANnel1")
+        values = "".join(self.do_query(":WAVeform:DATA?")).split(",")
+        values.pop()  # remove last element (it's empty)
+        print("Number of data values: %d" % len(values))
+        return values
 
     def do_command(self, command, hide_params=False):
         if hide_params:
@@ -301,6 +372,15 @@ class Infiniium:
             print("Qys = '%s'" % query)
         result = self.infiniium.query("%s" % query)
         self.check_instrument_errors(query)
+        return result
+
+    def do_query_ieee_block(self, query):
+        if debug:
+            print("Qyb = '%s'" % query)
+        result = self.infiniium.query_binary_values(
+            "%s" % query, datatype="s", container=bytes
+        )
+        self.check_instrument_errors(query, exit_on_error=False)
         return result
 
     def check_instrument_errors(self, command, exit_on_error=True):
