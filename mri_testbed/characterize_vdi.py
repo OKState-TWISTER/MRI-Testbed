@@ -1,4 +1,4 @@
-# v0.4
+# v1.0
 
 # This program serves to automatically profile VDI modules by controlling various components:
 ## A Thorlabs HDR50 rotator stage connected to a BSC201 controller positions the TX antenna
@@ -17,43 +17,24 @@
 
 
 ## TODO:
-# get waveforms off of scope
-# execute matlab from script
 # control speed of rotator
-# reset scope averaging every time rotator resets
+# add test cataegory for data sorting
 
-# import python modules
+# import libraries
 import atexit
 import csv
 import datetime
 import math
-#import matlab.engine
+import matlab.engine
 import matplotlib.pyplot as plot
 import numpy
 import os
-import pyvisa
-import struct
-import sys
+import pathlib
+import pickle
 import time
 
-# load .net assemblies
-# sys.path.append()  # os.getcwd()
-sys.path.append("C:\\Program Files\\Thorlabs\\Kinesis")
-sys.path.append(os.path.dirname(__file__))
-import clr
-clr.AddReference(r"C:\Program Files\Thorlabs\Kinesis\Thorlabs.MotionControl.Benchtop.StepperMotorCLI")
-clr.AddReference("C:\\Program Files\\Thorlabs\\Kinesis\\Thorlabs.MotionControl.Benchtop.StepperMotorUI")
-clr.AddReference("C:\\Program Files\\Thorlabs\\Kinesis\\Thorlabs.MotionControl.DeviceManagerCLI")
-clr.AddReference("C:\\Program Files\\Thorlabs\\Kinesis\\Thorlabs.MotionControl.GenericMotorCLI")
-
-import System
-import System.IO
-import System.Threading
-from Thorlabs.MotionControl.Benchtop.StepperMotorCLI import *
-from Thorlabs.MotionControl.DeviceManagerCLI import *
-from Thorlabs.MotionControl.GenericMotorCLI import *
-import Thorlabs.MotionControl.GenericMotorCLI.Settings
-
+from stage_control import Kinesis
+from scope_control import Infiniium
 
 ################################################################################################
 ################################################################################################
@@ -65,11 +46,11 @@ visa_address = "USB0::0x2A8D::0x9027::MY59190106::0::INSTR"
 date_time = datetime.datetime.now().strftime("%d%m%Y_%H%M%S")
 output_dir = "Data"
 #destination_filename = f"300ghz_data_test4.1-{date_time}.csv"
-destination_filename = f"antenna_pattern_6_antithzmaterialmk2_goodaverage-{date_time}.csv"
 
-starting_angle = 5  # where the test should begin
-ending_angle = -5
-step_size = 0.5  # how many degrees between each sample point
+
+starting_angle = 0  # where the test should begin
+ending_angle = 0
+step_size = 1  # how many degrees between each sample point
 averaging_time = 0.5  # how long to wait for DSO to average before recording value
 zero_offset = 0  # stage position that results in 0 degree actual angle for DUT (DO NOT CHANGE)
 debug = False
@@ -78,23 +59,31 @@ debug = False
 test_duration = (starting_angle - ending_angle) / step_size * averaging_time / 60 # minutes
 
 def main():
-    # Initialize rotation stage
-    stage = Kinesis(serial_num)
+    # TODO: check destination filename
 
-    # Initialize DSO
-    rm = pyvisa.ResourceManager(r"C:\WINDOWS\system32\visa64.dll")
-    scope = Infiniium(rm.open_resource(visa_address))
+    # Initialize DSO (scope_contro.py)
+    scope = Infiniium(visa_address, debug)
 
-    print('Actuator is "Homing"')
-    print(f"Start position: {starting_angle} : {starting_angle + zero_offset} (absolute)")
-    stage.move_to(starting_angle + zero_offset)
-    if (pos := stage.get_angle()) != (starting_angle + zero_offset):
-        print(
-            f"Error homing stage. Desired angle: {starting_angle}  measured angle: {pos}"
-        )
-        exit()
+    # Initialize rotation stage (stage_control.py)
+    stage = Kinesis(serial_num, starting_angle, zero_offset)
+
+    # Initialize MATLAB engine
+    #mle = Matlab_Engine()
+
+
+    settings = UI() # prompt user for settings
+    global save_dir
+    save_dir = os.path.join(output_dir,os.path.normpath(settings.test_series))
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+    global destination_filename
+    destination_filename = f"{settings.desc}-{date_time}.csv"
+    # todo number data files
+
+
+    if not stage.home():
+        exit() # if error when setting home
     else:
-        print("Stage is homed")
         print(f"Test will take {test_duration} minutes to complete.")
         input("Press any key to begin")
 
@@ -104,7 +93,7 @@ def main():
     plot = Custom_Plot()
     current_pos = stage.get_angle()
     try:
-        while current_pos > ending_angle: # TODO: fix this
+        while current_pos > ending_angle:
             print(f"Stage position: {current_pos} (absolute) {current_pos - zero_offset} (effective)")
             time.sleep(averaging_time)
 
@@ -114,7 +103,7 @@ def main():
             data[0].append(current_pos - zero_offset)
             data[1].append(power)
 
-            var = scope.get_waveform()
+            #var = scope.get_waveform()
             
             plot.update(data)
 
@@ -127,12 +116,12 @@ def main():
             if current_pos > starting_angle:
                 current_pos = current_pos - 360
 
-            break # REMOVE THIS ########################################################
     except KeyboardInterrupt:
         pass
 
-    print(f"writing data to {os.path.join(output_dir,destination_filename)}")
-    with open(destination_filename, "w", newline="") as csvfile:
+    data_dest = os.path.join(save_dir,destination_filename)
+    print(f"writing data to {data_dest}")
+    with open(data_dest, "w", newline="") as csvfile:
         csvwriter = csv.writer(csvfile)
         for i in range(len(data[0])):
             row = (data[0][i], data[1][i])
@@ -163,6 +152,7 @@ def normalize_power(power_data):
 
 class Custom_Plot:
     def __init__(self):
+        self.data = []
         plot.ion()
         self.fig = plot.figure(figsize=(8,8))
         self.axis = plot.subplot(111, polar=True)
@@ -193,214 +183,47 @@ class Custom_Plot:
         self.fig.canvas.flush_events()
 
     def print_report(self):
-        self.fig.savefig(os.path.join(output_dir,destination_filename.replace(".csv", ".png")))
-        print(f"Max value: {max(self.data[1])} dBm")
+        self.fig.savefig(os.path.join(save_dir,destination_filename.replace(".csv", ".png")))
+        #print(f"Max value: {max(self.data[1])} dBm")
 
         input("Press any key to exit")
 
 
-class Kinesis:
-    def __init__(self, serial_number):
-        atexit.register(self.shutdown)
-        # SimulationManager.Instance.InitializeSimulations() # only needed if using Kinesis simulator
 
-        DeviceManagerCLI.BuildDeviceList()
+class UI:
+    def __init__(self):
+        self.desc = None
+        self.test_series = None
+        self.settings_file = os.path.join(pathlib.Path(__file__).parent.absolute(),"settings.pkl")
+        print(f"pwd: {self.settings_file}")
+        if os.path.exists(self.settings_file):
+            try:
+                with open(self.settings_file, "rb") as inp:
+                    self.test_series = pickle.load(inp)
+            except:
+                pass
+        self.get_input()
 
-        self.device = BenchtopStepperMotor.CreateBenchtopStepperMotor(serial_number)
-        print(self.device)
-        self.device.Connect(serial_number)
-        # Thorlabs::MotionControl::Benchtop::StepperMotorCLI::StepperMotorChannel
-        # inherits GenericAdvancedMotorCLI
-        self.channel = self.device.GetChannel(1)
+        atexit.register(self.save)
 
-        if not self.channel.IsSettingsInitialized():
-            self.channel.WaitForSettingsInitialized(5000)
-
-        # Start the device polling
-        # The polling loop requests regular status requests to the motor to ensure the program keeps track of the device.
-        self.channel.StartPolling(250)
-        time.sleep(1)
-        self.channel.EnableDevice()
-        time.sleep(1)
-        print("Device Enabled")
-
-        motorConfiguration = self.channel.LoadMotorConfiguration(self.channel.DeviceID)
-        deviceInfo = self.channel.GetDeviceInfo()
-        print(f"Device {deviceInfo.SerialNumber} = {deviceInfo.Name}")
-
-        # set device parameters
-        print(f"Stage needs homing? {self.channel.NeedsHoming}")
-        print(f"Poisition calibrated? {self.channel.IsPositionCalibrated}")
-        self.channel.SetBacklash(System.Decimal(0))
-
-        #print(self.channel.AdvancedMotorLimits.VelocityMaximum)
-        #settings = ThorlabsBenchtopStepperMotorSettings
-        #settings.GetSettings(motorConfiguration)
-        #con = settings.Control
-        #con.DefMaxVel = System.Decimal(5) #type does not support setting attributes
-        #self.channel.SetSettings(settings, False) # Object of type 'System.RuntimeType' cannot be converted to type 'Thorlabs.MotionControl.DeviceManagerCLI.DeviceSettings'.
-        # TODO: contant Thorlabs or pythonnet devs about abiguous errors
-
-        self.channel.SetRotationModes(
-            Thorlabs.MotionControl.GenericMotorCLI.Settings.RotationSettings.RotationModes.RotationalRange,
-            Thorlabs.MotionControl.GenericMotorCLI.Settings.RotationSettings.RotationDirections.Quickest,
-        )
-
-    def shutdown(self):
-        self.move_to(zero_offset)
-        self.channel.StopPolling()
-        self.device.ShutDown()
-
-    def get_angle(self):
-        angle = self.channel.Position
-        return float(angle.ToString())  # dirty type conversion
-
-    def move_to(self, angle):
-        if angle < 0:
-            angle = angle + 360
-        elif angle > 360:
-            angle = angle + 360
-        self.channel.MoveTo(System.Decimal(angle), 60000)
-
-
-class Infiniium:
-    def __init__(self, resource):
-        atexit.register(self.shutdown)
-        self.infiniium = resource
-        self.infiniium.timeout = 20000
-        self.infiniium.clear()
-        # Clear status.
-        self.do_command("*CLS")
-        # Get and display the device's *IDN? string.
-        idn_string = self.do_query("*IDN?")
-        print("Identification string: '%s'" % idn_string)
-
-        # Set waveform capture settings
-        self.do_command(":SYSTem:HEADer OFF")
-        self.do_command(":WAVeform:SOURce CHANnel1")
-        self.do_command(":WAVeform:STReaming OFF")
-        self.do_command(":ACQuire:MODE HRESolution")  # this may slow data acquisition down considerably
-        self.do_command(":ACQuire:COMPlete 100")  # take a full measurement
-        self.do_command(":ACQuire:POINts 1000")
-
-    def shutdown(self):
-        self.infiniium.close()
-
-    def get_fft_peak(self):
-        power = self.do_query(":FUNCtion4:FFT:PEAK:MAGNitude?").strip().replace('"', "")
-        if "9.99999E+37" in power:
-            power = "-9999"
-        return float(power)
-
-    def get_waveform_bytes(self):
-        # Get the number of waveform points.
-        qresult = self.do_query(":WAVeform:POINts?")
-        print("Waveform points: %s" % qresult)
-
-        # Choose the format of the data returned:
-        self.do_command(":WAVeform:FORMat BYTE")
-        print("Waveform format: %s" % self.do_query(":WAVeform:FORMat?"))
-
-        # Get the waveform data.
-        self.do_command(":DIGitize CHANnel1")
-        sData = self.do_query_ieee_block(":WAVeform:DATA?")
-
-        # Unpack signed byte data.
-        values = struct.unpack("%db" % len(sData), sData)
-        print("Number of data values: %d" % len(values))
-        return values
-
-    def get_waveform_words(self):
-        # Get the number of waveform points.
-        qresult = self.do_query(":WAVeform:POINts?")
-        print("Waveform points: %s" % qresult)
-
-        # Choose the format of the data returned:
-        self.do_command(":WAVeform:FORMat WORD")
-        print("Waveform format: %s" % self.do_query(":WAVeform:FORMat?"))
-
-        # Get the waveform data.
-        self.do_command(":DIGitize CHANnel1")
-        sData = self.do_query_ieee_block(":WAVeform:DATA?")
-
-        print(f"length: {len(sData)}")
-
-        # Unpack signed byte data.
-        # values = struct.unpack("%db" % (len(sData)/1), sData)
-        values = []
-        for m, l in zip(sData[0::2], sData[1::2]):
-            values.append(int.from_bytes([m, l], byteorder="big", signed=True))
-
-        print("Number of data values: %d" % len(values))
-
-        return values
-
-    def get_waveform_ascii(self):
-        # Get the number of waveform points.
-        qresult = self.do_query(":WAVeform:POINts?")
-        print("Waveform points: %s" % qresult)
-
-        # Choose the format of the data returned:
-        self.do_command(":WAVeform:FORMat ASCii")
-        print("Waveform format: %s" % self.do_query(":WAVeform:FORMat?"))
-
-        # Get the waveform data.
-        self.do_command(":DIGitize CHANnel1")
-        values = "".join(self.do_query(":WAVeform:DATA?")).split(",")
-        values.pop()  # remove last element (it's empty)
-        print("Number of data values: %d" % len(values))
-        return values
-
-    def do_command(self, command, hide_params=False):
-        if hide_params:
-            (header, data) = command.split(" ", 1)
-            if debug:
-                print("\nCmd = '%s'" % header)
-        else:
-            if debug:
-                print("\nCmd = '%s'" % command)
-
-        self.infiniium.write("%s" % command)
-
-        if hide_params:
-            self.check_instrument_errors(header)
-        else:
-            self.check_instrument_errors(command)
-
-    def do_query(self, query):
-        if debug:
-            print("Qys = '%s'" % query)
-        result = self.infiniium.query("%s" % query)
-        self.check_instrument_errors(query)
-        return result
-
-    def do_query_ieee_block(self, query):
-        if debug:
-            print("Qyb = '%s'" % query)
-        result = self.infiniium.query_binary_values(
-            "%s" % query, datatype="s", container=bytes
-        )
-        self.check_instrument_errors(query, exit_on_error=False)
-        return result
-
-    def check_instrument_errors(self, command, exit_on_error=True):
+    def get_input(self):
         while True:
-            error_string = self.infiniium.query(":SYSTem:ERRor? STRing")
-            if error_string:  # If there is an error string value.
-                if error_string.find("0,", 0, 2) == -1:  # Not "No error".
-                    print("ERROR: %s, command: '%s'" % (error_string, command))
-                    if exit_on_error:
-                        print("Exited because of error.")
-                        sys.exit(1)
-                else:  # "No error"
-                    break
-            else:  # :SYSTem:ERRor? STRing should always return string.
-                print(
-                    "ERROR: :SYSTem:ERRor? STRing returned nothing, command: '%s'"
-                    % command
-                )
-                print("Exited because of error.")
-                sys.exit(1)
+            new_ts = input(f"Enter name of test series or press enter to use last series ({self.test_series}): ")
+            if new_ts:
+                print(f"new input: {new_ts}")
+                self.test_series = new_ts
+            if self.test_series is not None:
+                break
+
+        while self.desc is None:
+            desc = input(f"Enter description for test: ")
+            if desc:
+                print(f"new description: {desc}")
+                self.desc = desc
+
+    def save(self):
+        with open(self.settings_file, 'wb') as outp:
+            pickle.dump(self.test_series, outp, pickle.HIGHEST_PROTOCOL)
 
 
 main()

@@ -1,3 +1,6 @@
+/Data
+*.pyc
 *.csv
 *.png
 *.jpg
+*.pkl
