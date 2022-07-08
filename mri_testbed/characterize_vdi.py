@@ -48,9 +48,9 @@ output_dir = "Data"
 #destination_filename = f"300ghz_data_test4.1-{date_time}.csv"
 
 
-starting_angle = 0  # where the test should begin
-ending_angle = 0
-step_size = 1  # how many degrees between each sample point
+starting_angle = 15  # where the test should begin (positive)
+ending_angle = -15 # where the test should end (negative probably)
+step_size = .1  # how many degrees between each sample point
 averaging_time = 0.5  # how long to wait for DSO to average before recording value
 zero_offset = 0  # stage position that results in 0 degree actual angle for DUT (DO NOT CHANGE)
 debug = False
@@ -90,7 +90,7 @@ def main():
     # Reset averaging
     scope.do_command(":CDISplay")
     data = [[], []]
-    plot = Custom_Plot()
+    plot = Custom_Plot(settings.desc)
     current_pos = stage.get_angle()
     try:
         while current_pos > ending_angle:
@@ -151,7 +151,7 @@ def normalize_power(power_data):
 
 
 class Custom_Plot:
-    def __init__(self):
+    def __init__(self, description):
         self.data = []
         plot.ion()
         self.fig = plot.figure(figsize=(8,8))
@@ -168,7 +168,7 @@ class Custom_Plot:
             va="center",
         )
         #self.axis.set_yticks(range(-24, 6, 6))
-        #self.axis.set_title("")
+        self.axis.set_title(description)
         atexit.register(self.print_report)
 
     def update(self, data):
