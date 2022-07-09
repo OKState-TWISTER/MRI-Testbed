@@ -1,4 +1,4 @@
-# v1.0
+# v1.1
 
 # This program serves to automatically profile VDI modules by controlling various components:
 ## A Thorlabs HDR50 rotator stage connected to a BSC201 controller positions the TX antenna
@@ -31,6 +31,7 @@ import numpy
 import os
 import pathlib
 import pickle
+import sys
 import time
 
 from stage_control import Kinesis
@@ -48,12 +49,13 @@ output_dir = "Data"
 #destination_filename = f"300ghz_data_test4.1-{date_time}.csv"
 
 
-starting_angle = 15  # where the test should begin (positive)
-ending_angle = -15 # where the test should end (negative probably)
-step_size = .1  # how many degrees between each sample point
+starting_angle = 20  # where the test should begin (positive)
+ending_angle = -20 # where the test should end (negative probably)
+step_size = .05  # how many degrees between each sample point
 averaging_time = 0.5  # how long to wait for DSO to average before recording value
 zero_offset = 0  # stage position that results in 0 degree actual angle for DUT (DO NOT CHANGE)
-debug = False
+
+debug = True
 
 # Do not change
 test_duration = (starting_angle - ending_angle) / step_size * averaging_time / 60 # minutes
@@ -65,7 +67,7 @@ def main():
     scope = Infiniium(visa_address, debug)
 
     # Initialize rotation stage (stage_control.py)
-    stage = Kinesis(serial_num, starting_angle, zero_offset)
+    stage = Kinesis(serial_num, debug, starting_angle, zero_offset)
 
     # Initialize MATLAB engine
     #mle = Matlab_Engine()
@@ -82,7 +84,10 @@ def main():
 
 
     if not stage.home():
-        exit() # if error when setting home
+        print("Error when homing stage")
+        if not debug:
+            sys.exit(-1)
+        input("Program paused. Check stage then press any key to continue")  
     else:
         print(f"Test will take {test_duration} minutes to complete.")
         input("Press any key to begin")
@@ -118,6 +123,10 @@ def main():
 
     except KeyboardInterrupt:
         pass
+    except Exception as e:
+        print(f"Error: {e}")
+        if not debug:
+            sys.exit(-1)
 
     data_dest = os.path.join(save_dir,destination_filename)
     print(f"writing data to {data_dest}")

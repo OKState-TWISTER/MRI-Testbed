@@ -2,6 +2,7 @@ import atexit
 import os
 import sys
 import time
+from utils import *
 
 # load .net assemblies
 # sys.path.append()  # os.getcwd()
@@ -21,8 +22,11 @@ from Thorlabs.MotionControl.DeviceManagerCLI import *
 from Thorlabs.MotionControl.GenericMotorCLI import *
 import Thorlabs.MotionControl.GenericMotorCLI.Settings
 
+
 class Kinesis:
-    def __init__(self, serial_number, start_pos, zero_offset):
+    @catch_exceptions
+    def __init__(self, serial_number, debug, start_pos, zero_offset):
+        self.debug = debug
         atexit.register(self.shutdown)
 
         self.starting_angle = start_pos
@@ -72,11 +76,13 @@ class Kinesis:
             Thorlabs.MotionControl.GenericMotorCLI.Settings.RotationSettings.RotationDirections.Quickest,
         )
 
+    @catch_exceptions
     def shutdown(self):
         self.move_to(self.zero_offset)
         self.channel.StopPolling()
         self.device.ShutDown()
 
+    @catch_exceptions
     def home(self):
         print('Actuator is "Homing"')
         print(f"Start position: {self.starting_angle} : {self.starting_angle + self.zero_offset} (absolute)")
@@ -90,10 +96,12 @@ class Kinesis:
             print("Stage is homed")
             return True
 
+    @catch_exceptions
     def get_angle(self):
         angle = self.channel.Position
         return float(angle.ToString())  # dirty type conversion
 
+    @catch_exceptions
     def move_to(self, angle):
         if angle < 0:
             angle = angle + 360
