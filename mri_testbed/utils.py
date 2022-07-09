@@ -1,5 +1,8 @@
+import math
 import sys
 
+
+# decorator for class functions
 def catch_exceptions(func):
         def wrapper(*args, **kwargs):
             self = args[0]
@@ -10,3 +13,20 @@ def catch_exceptions(func):
                 if not self.debug:
                     sys.exit(-1)
         return wrapper
+
+
+def deg_to_rad(deg_data):
+    rad_pos = []
+    for angle in deg_data:
+        rad_pos.append(angle * (math.pi / 180))
+    return rad_pos
+
+
+def normalize_power(power_data):
+    pmax = max(power_data)
+    power_rat = []
+    for p in power_data:
+        powernorm = p - pmax  # normalize max power to 0dB
+        prat = 10 ** (powernorm / 20)  # convert dB to ratio
+        power_rat.append(prat)
+    return power_rat

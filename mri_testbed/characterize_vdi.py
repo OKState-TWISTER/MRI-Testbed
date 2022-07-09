@@ -33,6 +33,7 @@ import pathlib
 import pickle
 import sys
 import time
+from utils import *
 
 from stage_control import Kinesis
 from scope_control import Infiniium
@@ -141,24 +142,6 @@ def main():
 ################################################################################################
 ################################################################################################
 
-
-def deg_to_rad(deg_data):
-    rad_pos = []
-    for angle in deg_data:
-        rad_pos.append(angle * (math.pi / 180))
-    return rad_pos
-
-
-def normalize_power(power_data):
-    pmax = max(power_data)
-    power_rat = []
-    for p in power_data:
-        powernorm = p - pmax  # normalize max power to 0dB
-        prat = 10 ** (powernorm / 20)  # convert dB to ratio
-        power_rat.append(prat)
-    return power_rat
-
-
 class Custom_Plot:
     def __init__(self, description):
         self.data = []
@@ -196,7 +179,6 @@ class Custom_Plot:
         #print(f"Max value: {max(self.data[1])} dBm")
 
         input("Press any key to exit")
-
 
 
 class UI:
