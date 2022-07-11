@@ -1,8 +1,19 @@
+"""
+This module handles interfacing with the Thorlabs HDR50 rotation stage.
+The stage is controlled using the Thorlabs provided .NET libraries via the pythonnet package.
+
+Requires:
+- pythonnet: https://pythonnet.github.io/
+- Thorlabs Kinesis: https://www.thorlabs.com/software_pages/ViewSoftwarePage.cfm?Code=Motion_Control
+  (all relevant .dlls should be included in this repo (if you can get them to load))
+"""
+
 import atexit
 import os
 import sys
 import time
-from utils import *
+
+from utils import catch_exceptions
 
 # load .net assemblies
 # sys.path.append()  # os.getcwd()
@@ -10,14 +21,16 @@ sys.path.append("C:\\Program Files\\Thorlabs\\Kinesis")
 sys.path.append(os.path.dirname(__file__))
 import clr
 clr.AddReference(r"C:\Program Files\Thorlabs\Kinesis\Thorlabs.MotionControl.Benchtop.StepperMotorCLI")
-clr.AddReference("C:\\Program Files\\Thorlabs\\Kinesis\\Thorlabs.MotionControl.Benchtop.StepperMotorUI")
-clr.AddReference("C:\\Program Files\\Thorlabs\\Kinesis\\Thorlabs.MotionControl.DeviceManagerCLI")
-clr.AddReference("C:\\Program Files\\Thorlabs\\Kinesis\\Thorlabs.MotionControl.GenericMotorCLI")
+clr.AddReference(r"C:\Program Files\Thorlabs\Kinesis\Thorlabs.MotionControl.Benchtop.StepperMotorUI")
+clr.AddReference(r"C:\Program Files\Thorlabs\Kinesis\Thorlabs.MotionControl.DeviceManagerCLI")
+clr.AddReference(r"C:\\rogram Files\Thorlabs\Kinesis\Thorlabs.MotionControl.GenericMotorCLI")
 
 import System
 import System.IO
 import System.Threading
+from Thorlabs.MotionControl.Benchtop.StepperMotorCLI import CreateBenchtopStepperMotor
 from Thorlabs.MotionControl.Benchtop.StepperMotorCLI import *
+from Thorlabs.MotionControl.DeviceManagerCLI import BuildDeviceList
 from Thorlabs.MotionControl.DeviceManagerCLI import *
 from Thorlabs.MotionControl.GenericMotorCLI import *
 import Thorlabs.MotionControl.GenericMotorCLI.Settings

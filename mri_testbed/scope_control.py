@@ -1,16 +1,27 @@
+"""
+This module handles interfacing with the Keysight DSOV254A.
+The oscilloscope is controlled using the VISA standard via the pyvisa package.
+
+Requires:
+- pyvisa: (install with pip)
+- KeySight IOLS: https://www.keysight.com/zz/en/lib/software-detail/computer-software/io-libraries-suite-downloads-2175637.html
+"""
+
 import atexit
-import pyvisa
 import struct
 import sys
-from utils import *
+
+import pyvisa
+
+from utils import catch_exceptions
 
 
 class Infiniium:
     @catch_exceptions
     def __init__(self, visa_address, debug):
         self.debug = debug
-        print(f"self debug: {self.debug}")
         atexit.register(self.shutdown)
+
         rm = pyvisa.ResourceManager(r"C:\WINDOWS\system32\visa64.dll")
         self.infiniium = rm.open_resource(visa_address)
         self.infiniium.timeout = 20000
@@ -21,12 +32,12 @@ class Infiniium:
         print("Identification string: '%s'" % idn_string)
 
         # Set waveform capture settings
-        #self.do_command(":SYSTem:HEADer OFF")
-        #self.do_command(":WAVeform:SOURce CHANnel1")
-        #self.do_command(":WAVeform:STReaming OFF")
-        #self.do_command(":ACQuire:MODE HRESolution")  # this may slow data acquisition down considerably
-        #self.do_command(":ACQuire:COMPlete 100")  # take a full measurement
-        #self.do_command(":ACQuire:POINts 1000")
+        # self.do_command(":SYSTem:HEADer OFF")
+        # self.do_command(":WAVeform:SOURce CHANnel1")
+        # self.do_command(":WAVeform:STReaming OFF")
+        # self.do_command(":ACQuire:MODE HRESolution")  # this may slow data acquisition down considerably
+        # self.do_command(":ACQuire:COMPlete 100")  # take a full measurement
+        # self.do_command(":ACQuire:POINts 1000")
 
     @catch_exceptions
     def shutdown(self):
