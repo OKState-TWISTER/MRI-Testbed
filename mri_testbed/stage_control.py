@@ -23,14 +23,14 @@ import clr
 clr.AddReference(r"C:\Program Files\Thorlabs\Kinesis\Thorlabs.MotionControl.Benchtop.StepperMotorCLI")
 clr.AddReference(r"C:\Program Files\Thorlabs\Kinesis\Thorlabs.MotionControl.Benchtop.StepperMotorUI")
 clr.AddReference(r"C:\Program Files\Thorlabs\Kinesis\Thorlabs.MotionControl.DeviceManagerCLI")
-clr.AddReference(r"C:\\rogram Files\Thorlabs\Kinesis\Thorlabs.MotionControl.GenericMotorCLI")
+clr.AddReference(r"C:\Program Files\Thorlabs\Kinesis\Thorlabs.MotionControl.GenericMotorCLI")
 
 import System
 import System.IO
 import System.Threading
-from Thorlabs.MotionControl.Benchtop.StepperMotorCLI import CreateBenchtopStepperMotor
+#from Thorlabs.MotionControl.Benchtop.StepperMotorCLI import CreateBenchtopStepperMotor
 from Thorlabs.MotionControl.Benchtop.StepperMotorCLI import *
-from Thorlabs.MotionControl.DeviceManagerCLI import BuildDeviceList
+#from Thorlabs.MotionControl.DeviceManagerCLI import BuildDeviceList
 from Thorlabs.MotionControl.DeviceManagerCLI import *
 from Thorlabs.MotionControl.GenericMotorCLI import *
 import Thorlabs.MotionControl.GenericMotorCLI.Settings

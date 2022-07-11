@@ -1,16 +1,10 @@
-# v1.2
+# v1.3b1
 
 """
 This program serves to automatically profile VDI modules by controlling various components:
 A Thorlabs HDR50 rotator stage connected to a BSC201 controller positions the TX antenna
 A Keysight DSOV254A oscilloscope captures received waveforms
-The captured waveforms are analyzed using various MATLAB code
-
-Requires:
-pythonnet, pyvisa (install with pip)
-MATLAB Engine API for Python: https://www.mathworks.com/help/matlab/matlab_external/install-the-matlab-engine-for-python.html
-KeySight IOLS: https://www.keysight.com/zz/en/lib/software-detail/computer-software/io-libraries-suite-downloads-2175637.html
-
+The captured waveforms are analyzed using various MATLAB functions
 """
 
 # TODO:
@@ -23,7 +17,6 @@ import os
 import sys
 import time
 
-# import matlab.engine
 import matplotlib.pyplot as plot
 import numpy
 
@@ -31,6 +24,7 @@ from utils import deg_to_rad, normalize_power
 from stage_control import Kinesis
 from scope_control import Infiniium
 from user_interface import IO
+from waveform_analysis import Analyzer
 
 
 # Global Variables
