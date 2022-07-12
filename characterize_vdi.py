@@ -1,4 +1,4 @@
-# v1.3b1
+# v1.3b2
 
 """
 This program serves to automatically profile VDI modules by controlling various components:
@@ -24,7 +24,7 @@ from utils import deg_to_rad, normalize_power
 from stage_control import Kinesis
 from scope_control import Infiniium
 from user_interface import IO
-from waveform_analysis import Analyzer
+from waveform_analysis import WaveformProcessor
 
 
 # Global Variables
@@ -52,7 +52,7 @@ def main():
     averaging_time = settings.averaging_time()
     zero_offset = settings.zero_offset()
 
-    # Initialize DSO (scope_contro.py)
+    # Initialize DSO (scope_control.py)
     scope = Infiniium(visa_address, debug)
 
     # Initialize rotation stage (stage_control.py)
