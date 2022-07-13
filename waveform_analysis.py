@@ -32,7 +32,7 @@ class WaveformProcessor:
         self.sym_rate = wf_struct["symbol_rate"]
         self.rcf_rolloff = wf_struct["rcf_rolloff"]
 
-        self.if_estimate = 1.6e9
+        self.if_estimate = 4e9
         self.sym2drop = 300.0
 
     def load_qam_waveform(self, filepath=None):
@@ -52,7 +52,7 @@ class WaveformProcessor:
         print("Begin processing waveform")
         # function [data, nsym, errors, SNR] = processQAM(mod_order, block_length, sym_rate, IF_estimate, symbols_to_drop, rcf_rolloff, original_samples, samp_rate, captured_samples, diagnostics_on)
         (data, nsym, errors, SNR) = self.eng.processQAM(self.mod_order, self.block_length, self.sym_rate, self.if_estimate,
-                                                        self.sym2drop, self.rcf_rolloff, self.org_samples, samp_rate, samples, 0, nargout=4)
+                                                        self.sym2drop, self.rcf_rolloff, self.org_samples, samp_rate, samples, 1, nargout=4)
         end = time.time()
         print(f"Done. Took {end - start} seconds.")
 
@@ -74,12 +74,34 @@ class WaveformProcessor:
         # For QPSK only:
         print(f"Predicted QPSK SER is {SER_theory} ({round(SER_theory*nsym)} symbols)\n")
 
+        return biterr
+
 
 if __name__ == '__main__':
-    proc = WaveformProcessor("MATLAB\\smallflag.mat")
-    capfile = proc.load_qam_waveform("MATLAB\\smallflag_capture.mat")
+    from scope_control import Infiniium
 
-    cap_samp_rate = 1 / capfile["Channel_1"]["XInc"]
-    cap_samp = proc.eng.double(capfile["Channel_1"]["Data"])
+    #visa_address = "USB0::0x2A8D::0x9027::MY59190106::0::INSTR"
+    #scope = Infiniium(visa_address, False)
 
-    proc.process_qam(cap_samp_rate, cap_samp)
+    proc = WaveformProcessor("smallflag.mat")
+
+
+    #waveform = scope.get_waveform_words()
+    #samp_rate = scope.get_sample_rate()
+
+    import pickle
+    with open('saved_waveform.pkl', 'rb') as inp:
+        waveform = pickle.load(inp)
+        samp_rate = pickle.load(inp)
+
+
+    print("test")
+
+    #proc.eng.double(waveform)
+    proc.process_qam(samp_rate, waveform)
+
+
+#import pickle
+    #with open('saved_waveform.pkl', 'wb') as outp:
+    #    pickle.dump(waveform, outp, pickle.HIGHEST_PROTOCOL)
+    #    pickle.dump(samp_rate, outp, pickle.HIGHEST_PROTOCOL)
