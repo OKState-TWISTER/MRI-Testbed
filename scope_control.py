@@ -17,12 +17,12 @@ from utils import catch_exceptions
 
 
 class Infiniium:
-    @catch_exceptions
+    #@catch_exceptions
     def __init__(self, visa_address, debug):
         self.debug = debug
         atexit.register(self.shutdown)
 
-        rm = pyvisa.ResourceManager(r"C:\WINDOWS\system32\visa64.dll")
+        rm = pyvisa.ResourceManager("C:\\WINDOWS\\system32\\visa64.dll")
         self.infiniium = rm.open_resource(visa_address)
         self.infiniium.timeout = 20000
         self.infiniium.clear()
@@ -31,26 +31,32 @@ class Infiniium:
         idn_string = self.do_query("*IDN?")
         print("Identification string: '%s'" % idn_string)
 
-        # Set waveform capture settings
-        # self.do_command(":SYSTem:HEADer OFF")
-        # self.do_command(":WAVeform:SOURce CHANnel1")
-        # self.do_command(":WAVeform:STReaming OFF")
-        # self.do_command(":ACQuire:MODE HRESolution")  # this may slow data acquisition down considerably
-        # self.do_command(":ACQuire:COMPlete 100")  # take a full measurement
-        # self.do_command(":ACQuire:POINts 1000")
+        # TODO: load trigger setup (#9)
 
-    @catch_exceptions
+        # Set waveform capture settings
+        self.do_command(":SYSTem:HEADer OFF")
+        self.do_command(":WAVeform:SOURce CHANnel1")
+        self.do_command(":WAVeform:STReaming OFF")
+        # self.do_command(":ACQuire:MODE HRESolution")  # this may slow data acquisition down considerably
+        self.do_command(":ACQuire:COMPlete 100")  # take a full measurement
+        # self.do_command(":ACQuire:POINts 1000") # dont set points, let the scope capture between two triggers
+
+    #@catch_exceptions
     def shutdown(self):
         self.infiniium.close()
 
-    @catch_exceptions
+    #@catch_exceptions
     def get_fft_peak(self):
         power = self.do_query(":FUNCtion4:FFT:PEAK:MAGNitude?").strip().replace('"', "")
         if "9.99999E+37" in power:
             power = "-9999"
         return float(power)
 
-    @catch_exceptions
+    def get_sample_rate(self):
+        xinc = self.do_query(":WAVeform:XINCrement?")
+        return 1 / float(xinc)
+
+    #@catch_exceptions
     def get_waveform_bytes(self):
         # Get the number of waveform points.
         qresult = self.do_query(":WAVeform:POINts?")
@@ -69,7 +75,7 @@ class Infiniium:
         print("Number of data values: %d" % len(values))
         return values
 
-    @catch_exceptions
+    #@catch_exceptions
     def get_waveform_words(self):
         # Get the number of waveform points.
         qresult = self.do_query(":WAVeform:POINts?")
@@ -95,7 +101,7 @@ class Infiniium:
 
         return values
 
-    @catch_exceptions
+    #@catch_exceptions
     def get_waveform_ascii(self):
         # Get the number of waveform points.
         qresult = self.do_query(":WAVeform:POINts?")
@@ -112,7 +118,7 @@ class Infiniium:
         print("Number of data values: %d" % len(values))
         return values
 
-    @catch_exceptions
+    #@catch_exceptions
     def do_command(self, command, hide_params=False):
         if hide_params:
             (header, data) = command.split(" ", 1)
@@ -129,7 +135,7 @@ class Infiniium:
         else:
             self.check_instrument_errors(command)
 
-    @catch_exceptions
+    #@catch_exceptions
     def do_query(self, query):
         if self.debug:
             print("Qys = '%s'" % query)
@@ -137,7 +143,7 @@ class Infiniium:
         self.check_instrument_errors(query)
         return result
 
-    @catch_exceptions
+    #@catch_exceptions
     def do_query_ieee_block(self, query):
         if self.debug:
             print("Qyb = '%s'" % query)
@@ -147,7 +153,7 @@ class Infiniium:
         self.check_instrument_errors(query, exit_on_error=False)
         return result
 
-    @catch_exceptions
+    #@catch_exceptions
     def check_instrument_errors(self, command, exit_on_error=True):
         while True:
             error_string = self.infiniium.query(":SYSTem:ERRor? STRing")
