@@ -14,9 +14,10 @@ class IO:
         self.starting_pos = Setting("starting angle", description="where the test should begin (positive)")
         self.ending_pos = Setting("ending angle", description="where the test should end (negative probably)")
         self.step_size = Setting("step size", description="how many degrees between each sample point")
-        self.averaging_time = Setting("averaging time", description="how long to wait for DSO to average before recording value")
-        self.zero_offset = Setting("zero_offset", default_value="0", description="stage position that results in 0 degree actual angle for DUT.\n" +
+        self.averaging_time = Setting("averaging time", description="how many seconds to wait for DSO to average before recording value (this setting is ignored in SER mode)")
+        self.zero_offset = Setting("zero offset", default_value="0", description="stage position that results in 0 degree actual angle for DUT.\n" +
                                    "!!! Leave at 0 unless you know what you're doing !!!")
+        self.mode = Setting("measurement mode", description="measure complex waveform errors or single-tone signal amplitude", valid_values=["ser", "amplitude"])
 
         self.settings_file = os.path.join(
             pathlib.Path(__file__).parent.absolute(), settings_filename
@@ -29,6 +30,7 @@ class IO:
             "step_size": self.step_size,
             "averaging_time": self.averaging_time,
             "zero_offset": self.zero_offset,
+            "mode": self.mode,
         }
 
         self.load(settings)
@@ -78,26 +80,30 @@ class IO:
         prompt_text = f"\n[{setting.name}]"
         if setting.desc:
             prompt_text += f": {setting.desc}"
+        if setting.valid_values:
+            prompt_text += f"\nValid options: [{', '.join(setting.valid_values)}]"
         if setting.value:
             prompt_text += f"\nEnter {setting.name} or press enter to use previous value ({setting.value}): "
         else:
             prompt_text += f"\nEnter {setting.name}: "
 
-        if setting.value:
+        while True:
             nv = input(prompt_text)
             if nv:
-                setting.value = nv
-        else:
-            while setting.value is None:
-                nts = input(prompt_text)
-                if nts:
-                    setting.value = nts
+                if (setting.valid_values and nv in setting.valid_values) or not setting.valid_values:
+                    setting.value = nv
+                elif setting.valid_values:  # and nv not in setting.valid_values
+                    continue
+
+            if setting.value:
+                break
 
 
 class Setting:
-    def __init__(self, name=None, default_value=None, description=None):
+    def __init__(self, name=None, default_value=None, valid_values=None, description=None):
         self.name = name
         self.value = default_value
+        self.valid_values = valid_values
         self.desc = description
 
     def __call__(self):

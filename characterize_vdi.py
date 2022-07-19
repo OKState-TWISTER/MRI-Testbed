@@ -1,4 +1,4 @@
-# v1.3b2
+# v2.0b1
 
 """
 This program serves to automatically profile VDI modules by controlling various components:
@@ -28,17 +28,19 @@ from waveform_analysis import WaveformProcessor
 
 
 # Global Variables
-serial_num = "40163084"
-visa_address = "USB0::0x2A8D::0x9027::MY59190106::0::INSTR"
+serial_num = "40163084"  # Serial number for rotation stage
+visa_address = "USB0::0x2A8D::0x9027::MY59190106::0::INSTR"  # VISA address for DSO
 
 date_time = datetime.datetime.now().strftime("%d%m%Y_%H%M%S")
 output_dir = "Data"
 
-debug = True
+debug = False  # setting this to True can break things
+BER_test = True  # Set to 'False' to take simple signal amplitude measurements
 
 
 def main():
     settings = IO(debug)  # prompt user for settings
+
     global save_dir
     save_dir = os.path.join(output_dir, os.path.normpath(settings.test_series()))
     if not os.path.exists(save_dir):
@@ -46,11 +48,15 @@ def main():
     global destination_filename
     destination_filename = f"{settings.desc}-{date_time}.csv"
 
+    # TODO: call setting.prompt_input()'s from this script
+    #  use the IO class to keep track of defaults and save data (atexit)
+
     starting_angle = settings.starting_pos()
     ending_angle = settings.ending_pos()
     step_size = settings.step_size()
     averaging_time = settings.averaging_time()
     zero_offset = settings.zero_offset()
+    mode = settings.mode()
 
     # Initialize DSO (scope_control.py)
     scope = Infiniium(visa_address, debug)
@@ -58,8 +64,8 @@ def main():
     # Initialize rotation stage (stage_control.py)
     stage = Kinesis(serial_num, debug, starting_angle, zero_offset)
 
-    # Initialize MATLAB engine
-    # mle = Matlab_Engine()
+    # Initialize MATLAB Engine (waveform analysis.py)
+    waveform_proc = WaveformProcessor(True)
 
     if not stage.home():
         print("Error when homing stage")
@@ -81,19 +87,22 @@ def main():
             print(
                 f"Stage position: {current_pos} (absolute) {current_pos - zero_offset} (effective)"
             )
-            time.sleep(averaging_time)
 
-            power = scope.get_fft_peak()
-            print(f"Power level: {power} dBm")
+            if mode == "amplitude":
+                time.sleep(averaging_time)
+                datapoint = scope.get_fft_peak()
+                # TODO: make sure peak is at correct frequency
+                print(f"Power level: {datapoint} dBm")
+
+            elif mode == "ber":
+                waveform = scope.get_waveform_words()
+                samp_rate = scope.get_sample_rate
+                datapoint = waveform_proc.process_qam(waveform, samp_rate)
 
             data[0].append(current_pos - zero_offset)
-            data[1].append(power)
-
-            # var = scope.get_waveform()
+            data[1].append(datapoint)
 
             plot.update(data)
-
-            # TODO: make sure peak is at correct frequency
 
             print("Stage is moving")
             # Be very careful when moving the stage to not wrap coax
