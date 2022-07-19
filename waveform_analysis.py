@@ -10,6 +10,7 @@ https://www.mathworks.com/help/matlab/matlab_external/call-user-script-and-funct
 
 import math
 import os
+import sys
 from time import time
 
 import matlab.engine
@@ -18,7 +19,7 @@ import matlab.engine
 
 
 class WaveformProcessor:
-    def __init__(self, debug, org_waveform=None):
+    def __init__(self, debug=False, org_waveform=None):
         self.debug = debug
 
         print("Initializing MATLAB engine")
@@ -27,7 +28,7 @@ class WaveformProcessor:
         end = time()
         print(f"Done. Took {end - start} seconds.")
 
-        wf_struct = self.load_qam_waveform(org_waveform)["original"]
+        wf_struct = self.load_qam_waveform(org_waveform)
         self.mod_order = wf_struct["modulation_order"]
         self.block_length = wf_struct["block_length"]
         self.org_samples = wf_struct["samples"]
@@ -39,15 +40,21 @@ class WaveformProcessor:
 
     def load_qam_waveform(self, filepath=None):
         while filepath is None:
-            file = input("Enter original waveform filename: ")
+            file = input("Enter original waveform filename (.mat): ")
             file = os.path.normpath(file)
-            if os.path.isfile(file):
+            if os.path.isfile(file) and file.endswith(".mat"):
                 filepath = file
                 break
             else:
                 print("Please enter a valid filename")
 
-        return self.eng.load(filepath)
+        struct = self.eng.load(filepath)
+        try:
+            wf_struct = struct["original"]
+        except KeyError:
+            print(f"\nError: no field named \"original\" in file {filepath}")
+            sys.exit(-1)
+        return wf_struct
 
     def process_qam(self, samp_rate, captured_samples):
         start = time()
@@ -62,13 +69,14 @@ class WaveformProcessor:
         rcf_rolloff = self.rcf_rolloff
         original_samples = self.org_samples
         captured_samples = matlab.double(captured_samples)
-        
+
         data, nsym, errors, SNR = self.eng.processQAM(mod_order, block_length, symbol_rate, if_estimate,
                                                       sym2drop, rcf_rolloff, original_samples,
-                                                      samp_rate, captured_samples, 1, nargout=4)
-        
+                                                      samp_rate, captured_samples, self.debug, nargout=4)
+
         end = time()
-        print(f"Done. Took {end - start} seconds.")
+        if self.debug:
+            print(f"Done. Took {end - start} seconds.")
 
         # Theoretical SER for the calculated SNR, ASSUMING GAUSSIAN NOISE.
         # The assumption of Gaussian noise may not always be correct, so verify.
@@ -76,21 +84,20 @@ class WaveformProcessor:
         # SER_theory = erfc(sqrt(0.5*(10.^(SNR/10)))) - (1/4)*(erfc(sqrt(0.5*(10.^(SNR/10))))).^2; # original
         SER_theory = self.eng.erfc(math.sqrt(0.5 * (10 ** (SNR / 10)))) - (1 / 4) * (self.eng.erfc(math.sqrt(0.5 * (10 ** (SNR / 10))))) ** 2
 
-        # print results TODO: clean up
-        print(f"\nAnalyzing {nsym} symbols:\n")
-        print(f"SNR is {SNR} dB\n")
         bits = errors["bit"]
         biterr = bits / (nsym * math.log2(self.mod_order))
-        print(f"Observed BER is {biterr} ({bits} bits)\n")
         syms = errors["sym"]
         symerr = syms / nsym
-        print(f"Observed SER is {symerr} ({syms} symbols)\n")
-        # For QPSK only:
-        print(f"Predicted QPSK SER is {SER_theory} ({round(SER_theory*nsym)} symbols)\n")
+
+        if self.debug:
+            print(f"\nAnalyzing {nsym} symbols:\n")
+            print(f"SNR is {SNR} dB\n")
+            print(f"Observed BER is {biterr} ({bits} bits)\n")
+            print(f"Observed SER is {symerr} ({syms} symbols)\n")
+            # For QPSK only:
+            print(f"Predicted QPSK SER is {SER_theory} ({round(SER_theory*nsym)} symbols)\n")
 
         return biterr
-
-        end = time()
 
 
 if __name__ == '__main__':
@@ -118,7 +125,7 @@ if __name__ == '__main__':
         print(f"visa (scope) capture:\n{len(waveform)} samples\n{len(waveform) / samp_rate} seconds\n")
 
     elif source == "matlab_cap_file":
-        loaded = proc.load_qam_waveform("m4n5capture.mat")["Channel_1"]
+        loaded = proc.eng.load("m4n5capture.mat")["Channel_1"]
         samp_rate = 1 / loaded["XInc"]
         waveform = loaded["Data"].tomemoryview().tolist()
         waveform = [row[0] for row in waveform]#[352000:352500]

@@ -1,4 +1,4 @@
-# v2.0b1
+# v2.1b1
 
 """
 This program serves to automatically profile VDI modules by controlling various components:
@@ -64,8 +64,9 @@ def main():
     # Initialize rotation stage (stage_control.py)
     stage = Kinesis(serial_num, debug, starting_angle, zero_offset)
 
-    # Initialize MATLAB Engine (waveform analysis.py)
-    waveform_proc = WaveformProcessor(True)
+    if mode == "ser":
+        # Initialize MATLAB Engine (waveform analysis.py)
+        waveform_proc = WaveformProcessor(debug=True)
 
     if not stage.home():
         print("Error when homing stage")
@@ -94,7 +95,7 @@ def main():
                 # TODO: make sure peak is at correct frequency
                 print(f"Power level: {datapoint} dBm")
 
-            elif mode == "ber":
+            elif mode == "ser":
                 waveform = scope.get_waveform_words()
                 samp_rate = scope.get_sample_rate
                 datapoint = waveform_proc.process_qam(waveform, samp_rate)
