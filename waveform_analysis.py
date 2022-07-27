@@ -109,34 +109,21 @@ class WaveformProcessor:
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
-    source = "visa_cap_file"
+    import pickle
 
-    proc = WaveformProcessor(True, "M4N5_Permutation_Sequence.mat")
+    original_waveform_filename = "M4N5_Permutation_Sequence.mat"  # this is the matlab file with the waveform
+    captured_waveform_filename = ""  # this is the python object file (.pkl)
 
-    if source == "scope":
-        from scope_control import Infiniium
-        visa_address = "USB0::0x2A8D::0x9027::MY59190106::0::INSTR"
-        scope = Infiniium(visa_address, False)
-        waveform = scope.get_waveform_words()
-        samp_rate = scope.get_sample_rate()
 
-    elif source == "visa_cap_file":
-        import pickle
-        with open('m4n5_waveform_obj.pkl', 'rb') as inp:
-            waveform = pickle.load(inp)[0::2]
-            samp_rate = pickle.load(inp) / 2
+    proc = WaveformProcessor(True, original_waveform_filename)
 
-    #plt.figure(1)
-    #plt.plot(waveform1)
-    #plt.title(f"visa (scope) capture")
-        print(f"visa (scope) capture:\n{len(waveform)} samples\n{len(waveform) / samp_rate} seconds\n")
+    with open(captured_waveform_filename, 'rb') as inp:
+        waveform = pickle.load(inp)
+        samp_rate = pickle.load(inp)
 
-    elif source == "matlab_cap_file":
-        loaded = proc.eng.load("m4n5capture.mat")["Channel_1"]
-        samp_rate = 1 / loaded["XInc"]
-        waveform = loaded["Data"].tomemoryview().tolist()
-        waveform = [row[0] for row in waveform]#[352000:352500]
-
+    plt.figure(1)
+    plt.plot(waveform)
+    plt.title("capturer waveform")
 
     proc.process_qam(samp_rate, waveform)
     input()

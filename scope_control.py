@@ -13,11 +13,8 @@ import sys
 
 import pyvisa
 
-from utils import catch_exceptions
-
 
 class Infiniium:
-    #@catch_exceptions
     def __init__(self, visa_address, debug):
         self.debug = debug
         atexit.register(self.shutdown)
@@ -41,11 +38,9 @@ class Infiniium:
         self.do_command(":ACQuire:COMPlete 100")  # take a full measurement
         # self.do_command(":ACQuire:POINts 1000") # dont set points, let the scope capture between two triggers
 
-    #@catch_exceptions
     def shutdown(self):
         self.infiniium.close()
 
-    #@catch_exceptions
     def get_fft_peak(self):
         power = self.do_query(":FUNCtion4:FFT:PEAK:MAGNitude?").strip().replace('"', "")
         if "9.99999E+37" in power:
@@ -56,7 +51,6 @@ class Infiniium:
         xinc = self.do_query(":WAVeform:XINCrement?")
         return 1 / float(xinc)
 
-    #@catch_exceptions
     def get_waveform_bytes(self):
         # Get the number of waveform points.
         qresult = self.do_query(":WAVeform:POINts?")
@@ -75,7 +69,6 @@ class Infiniium:
         print("Number of data values: %d" % len(values))
         return values
 
-    #@catch_exceptions
     def get_waveform_words(self):
         # Get the number of waveform points.
         qresult = self.do_query(":WAVeform:POINts?")
@@ -101,7 +94,6 @@ class Infiniium:
 
         return values
 
-    #@catch_exceptions
     def get_waveform_ascii(self):
         # Get the number of waveform points.
         qresult = self.do_query(":WAVeform:POINts?")
@@ -118,7 +110,6 @@ class Infiniium:
         print("Number of data values: %d" % len(values))
         return values
 
-    #@catch_exceptions
     def do_command(self, command, hide_params=False):
         if hide_params:
             (header, data) = command.split(" ", 1)
@@ -135,7 +126,6 @@ class Infiniium:
         else:
             self.check_instrument_errors(command)
 
-    #@catch_exceptions
     def do_query(self, query):
         if self.debug:
             print("Qys = '%s'" % query)
@@ -143,7 +133,6 @@ class Infiniium:
         self.check_instrument_errors(query)
         return result
 
-    #@catch_exceptions
     def do_query_ieee_block(self, query):
         if self.debug:
             print("Qyb = '%s'" % query)
@@ -153,7 +142,6 @@ class Infiniium:
         self.check_instrument_errors(query, exit_on_error=False)
         return result
 
-    #@catch_exceptions
     def check_instrument_errors(self, command, exit_on_error=True):
         while True:
             error_string = self.infiniium.query(":SYSTem:ERRor? STRing")

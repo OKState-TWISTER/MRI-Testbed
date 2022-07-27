@@ -1,4 +1,4 @@
-# v2.1b1
+# v2.2b1
 
 """
 This program serves to automatically profile VDI modules by controlling various components:
@@ -19,6 +19,7 @@ import time
 
 import matplotlib.pyplot as plot
 import numpy
+import pickle
 
 from utils import deg_to_rad, normalize_power
 from stage_control import Kinesis
@@ -34,8 +35,11 @@ visa_address = "USB0::0x2A8D::0x9027::MY59190106::0::INSTR"  # VISA address for 
 date_time = datetime.datetime.now().strftime("%d%m%Y_%H%M%S")
 output_dir = "Data"
 
-debug = False  # setting this to True can break things
 BER_test = True  # Set to 'False' to take simple signal amplitude measurements
+
+# Various mode controls
+debug = False  # prints a whole lot of debug info
+processor_debug = False  # performs a single shot measurement, dumps waveform to file
 
 
 def main():
@@ -46,10 +50,7 @@ def main():
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
     global destination_filename
-    destination_filename = f"{settings.desc}-{date_time}.csv"
-
-    # TODO: call setting.prompt_input()'s from this script
-    #  use the IO class to keep track of defaults and save data (atexit)
+    destination_filename = f"{settings.desc}-{date_time}"
 
     starting_angle = float(settings.starting_pos())
     ending_angle = float(settings.ending_pos())
@@ -61,78 +62,112 @@ def main():
     # Initialize DSO (scope_control.py)
     scope = Infiniium(visa_address, debug)
 
-    # Initialize rotation stage (stage_control.py)
-    stage = Kinesis(serial_num, debug, starting_angle, zero_offset)
+    if not processor_debug:
+        # Initialize rotation stage (stage_control.py)
+        stage = Kinesis(serial_num, debug, starting_angle, zero_offset)
 
     if mode == "ser":
         # Initialize MATLAB Engine (waveform analysis.py)
         waveform_proc = WaveformProcessor(debug=True)
 
-    if not stage.home():
-        print("Error when homing stage")
-        if not debug:
+    if not processor_debug:
+        if not stage.home():
+            print("Error when homing stage")
             sys.exit(-1)
-        input("Program paused. Check stage then press any key to continue")
-    else:
+
         test_length = (starting_angle - ending_angle) / step_size * averaging_time / 60
         print(f"Test will take {test_length} minutes to complete.")
-        input("Press any key to begin")
+
+    input("Press any key to begin")
 
     # Reset averaging
     scope.do_command(":CDISplay")
-    data = [[], []]
-    plot = Custom_Plot(settings.desc)
-    current_pos = stage.get_angle()
     try:
-        while current_pos > ending_angle:
-            print(
-                f"Stage position: {current_pos} (absolute) {current_pos - zero_offset} (effective)"
-            )
-
-            if mode == "amplitude":
-                time.sleep(averaging_time)
-                datapoint = scope.get_fft_peak()
-                # TODO: make sure peak is at correct frequency
-                print(f"Power level: {datapoint} dBm")
-
-            elif mode == "ser":
-                waveform = scope.get_waveform_words()
-                waveform = [float(dat) for dat in waveform]
-                samp_rate = float(scope.get_sample_rate())
-                datapoint = waveform_proc.process_qam(samp_rate, waveform)
-
-            data[0].append(current_pos - zero_offset)
-            data[1].append(datapoint)
-
-            plot.update(data)
-
-            print("Stage is moving")
-            # Be very careful when moving the stage to not wrap coax
-            stage.move_to(current_pos - step_size)
+        if not processor_debug:
+            plot = Custom_Plot(settings.desc)
             current_pos = stage.get_angle()
-            if current_pos > starting_angle:
-                current_pos = current_pos - 360
+            data = [[], []]
+
+            while current_pos > ending_angle:
+                print(f"Stage position: {current_pos} (absolute) {current_pos - zero_offset} (effective)")
+
+                if mode == "amplitude":
+                    datapoint = measure_amplitude(scope, averaging_time)
+                elif mode == "ser":
+                    datapoint = measure_ser(scope, waveform_proc)
+
+                data[0].append(current_pos - zero_offset)
+                data[1].append(datapoint)
+
+                plot.update(data)
+
+                print("Stage is moving")
+                # Be very careful when moving the stage to not wrap coax
+                stage.move_to(current_pos - step_size)
+                current_pos = stage.get_angle()
+                if current_pos > starting_angle:
+                    current_pos = current_pos - 360
+
+            data_dest = os.path.join(save_dir, destination_filename + ".csv")
+            print(f"writing data to {data_dest}")
+            with open(data_dest, "w", newline="") as csvfile:
+                csvwriter = csv.writer(csvfile)
+                for i in range(len(data[0])):
+                    row = (data[0][i], data[1][i])
+                    csvwriter.writerow(row)
+
+        else:  # if processor_debug mode
+            if mode == "amplitude":
+                measure_amplitude(scope, averaging_time, dump=True)
+            elif mode == "ser":
+                measure_ser(scope, waveform_proc, dump=True)
 
     except KeyboardInterrupt:
         pass
-    except Exception as e:
-        print(f"Error: {e}")
-        if not debug:
-            raise e
 
-    data_dest = os.path.join(save_dir, destination_filename)
-    print(f"writing data to {data_dest}")
-    with open(data_dest, "w", newline="") as csvfile:
-        csvwriter = csv.writer(csvfile)
-        for i in range(len(data[0])):
-            row = (data[0][i], data[1][i])
-            csvwriter.writerow(row)
     print("Test complete.")
 
     plot.print_report()
 
 
 ###############################################################################
+
+
+def measure_amplitude(scope, averaging_time, dump=False):
+    time.sleep(averaging_time)
+    datapoint = scope.get_fft_peak()
+    # TODO: make sure peak is at correct frequency
+    print(f"Power level: {datapoint} dBm")
+
+    if dump:
+        waveform = scope.get_waveform_words()
+        samp_rate = scope.get_sample_rate()
+        dump_waveform(waveform, samp_rate)
+
+    return datapoint
+
+
+def measure_ser(scope, waveform_proc, dump=False):
+    waveform = scope.get_waveform_words()
+    waveform = [float(dat) for dat in waveform]
+    samp_rate = float(scope.get_sample_rate())
+
+    if dump:
+        dump_waveform(waveform, samp_rate)
+
+    ser = waveform_proc.process_qam(samp_rate, waveform)
+    return ser
+
+
+def dump_waveform(waveform, samp_rate):
+    plot.figure(1)
+    plot.plot(waveform)
+    plot.title("Waveform dump")
+
+    datafile = os.path.join(save_dir, destination_filename + ".pkl")
+    with open(datafile, 'wb') as outp:
+        pickle.dump(waveform, outp, pickle.HIGHEST_PROTOCOL)
+        pickle.dump(samp_rate, outp, pickle.HIGHEST_PROTOCOL)
 
 
 class Custom_Plot:
@@ -160,7 +195,6 @@ class Custom_Plot:
         pos_data, power_data = data
         theta = deg_to_rad(pos_data)
         r = normalize_power(power_data)
-        r = power_data
 
         self.line.set_xdata(theta)
         self.line.set_ydata(r)
@@ -169,7 +203,7 @@ class Custom_Plot:
 
     def print_report(self):
         self.fig.savefig(
-            os.path.join(save_dir, destination_filename.replace(".csv", ".png"))
+            os.path.join(save_dir, destination_filename + ".png")
         )
         print(f"Max value: {max(self.data[1])} dBm")
 

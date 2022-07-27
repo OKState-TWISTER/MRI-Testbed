@@ -13,8 +13,6 @@ import os
 import sys
 import time
 
-#from utils import catch_exceptions
-
 # load .net assemblies
 # sys.path.append()  # os.getcwd()
 sys.path.append("C:\\Program Files\\Thorlabs\\Kinesis")
@@ -28,16 +26,15 @@ clr.AddReference(r"C:\Program Files\Thorlabs\Kinesis\Thorlabs.MotionControl.Gene
 import System
 import System.IO
 import System.Threading
-#from Thorlabs.MotionControl.Benchtop.StepperMotorCLI import CreateBenchtopStepperMotor
+# from Thorlabs.MotionControl.Benchtop.StepperMotorCLI import CreateBenchtopStepperMotor
 from Thorlabs.MotionControl.Benchtop.StepperMotorCLI import *
-#from Thorlabs.MotionControl.DeviceManagerCLI import BuildDeviceList
+# from Thorlabs.MotionControl.DeviceManagerCLI import BuildDeviceList
 from Thorlabs.MotionControl.DeviceManagerCLI import *
 from Thorlabs.MotionControl.GenericMotorCLI import *
 import Thorlabs.MotionControl.GenericMotorCLI.Settings
 
 
 class Kinesis:
-    #@catch_exceptions
     def __init__(self, serial_number, debug, start_pos, zero_offset):
         self.debug = debug
         atexit.register(self.shutdown)
@@ -89,18 +86,15 @@ class Kinesis:
             Thorlabs.MotionControl.GenericMotorCLI.Settings.RotationSettings.RotationDirections.Quickest,
         )
 
-    #@catch_exceptions
     def shutdown(self):
         self.move_to(self.zero_offset)
         self.channel.StopPolling()
         self.device.ShutDown()
 
-    #@catch_exceptions
     def home(self):
         print('Actuator is "Homing"')
         print(f"Start position: {self.starting_angle} : {self.starting_angle + self.zero_offset} (absolute)")
         self.move_to(self.starting_angle + self.zero_offset)
-        pos = float(self.channel.Position.ToString())
         if (pos := self.get_angle()) != (self.starting_angle + self.zero_offset):
             print(
                 f"Error homing stage. Desired angle: {self.starting_angle}  measured angle: {pos}"
@@ -110,12 +104,10 @@ class Kinesis:
             print("Stage is homed")
             return True
 
-    #@catch_exceptions
     def get_angle(self):
         angle = self.channel.Position
         return float(angle.ToString())  # dirty type conversion
 
-    #@catch_exceptions
     def move_to(self, angle):
         angle = float(angle)
         if angle < 0:
