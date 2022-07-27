@@ -229,7 +229,7 @@ samples = samples_full((end-block_length*n_frames+1):end);
 % The first thing to do is to align the measured and original symbols
 
 % Set up for the shift-determination loop
-header = original_symbols(1:16); % Look for this pattern in the RX data.
+header = original_symbols(1:32); % Look for this pattern in the RX data.
 shifts = 1:(length(original_symbols)-length(header));
 n_errors_min = numel(samples);
 phi_0_ideal = 0;
@@ -257,15 +257,18 @@ for n = 0:3
 
     % Diagnostic: see how the symbols compare. Helps debug rotation and
     % decoding problems.
-    %{
-    check = 20:40;
-    symbols_meas(check)'
-    symbols_orig_dec(check)'
+    
+    check = 300:330;
+    fprintf("\n Decoded: ");
+    fprintf("%.0f, ", symbols(check));
+    fprintf("\n Original: ");
+    fprintf("%.0f, ", original_symbols(check));
+    fprintf("\n");
     %}
 
     % Now get the SER.
     %symbols = reshape(symbols, block_length, n_frames);
-    n_errors = sum(original_symbols ~= symbols);
+    n_errors = sum(original_symbols ~= symbols)
     
     if n_errors < n_errors_min
         n_errors_min = n_errors;
