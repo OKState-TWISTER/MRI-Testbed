@@ -51,11 +51,11 @@ def main():
     # TODO: call setting.prompt_input()'s from this script
     #  use the IO class to keep track of defaults and save data (atexit)
 
-    starting_angle = settings.starting_pos()
-    ending_angle = settings.ending_pos()
-    step_size = settings.step_size()
-    averaging_time = settings.averaging_time()
-    zero_offset = settings.zero_offset()
+    starting_angle = float(settings.starting_pos())
+    ending_angle = float(settings.ending_pos())
+    step_size = float(settings.step_size())
+    averaging_time = float(settings.averaging_time())
+    zero_offset = float(settings.zero_offset())
     mode = settings.mode()
 
     # Initialize DSO (scope_control.py)
@@ -97,8 +97,9 @@ def main():
 
             elif mode == "ser":
                 waveform = scope.get_waveform_words()
-                samp_rate = scope.get_sample_rate
-                datapoint = waveform_proc.process_qam(waveform, samp_rate)
+                waveform = [float(dat) for dat in waveform]
+                samp_rate = float(scope.get_sample_rate())
+                datapoint = waveform_proc.process_qam(samp_rate, waveform)
 
             data[0].append(current_pos - zero_offset)
             data[1].append(datapoint)
@@ -159,6 +160,7 @@ class Custom_Plot:
         pos_data, power_data = data
         theta = deg_to_rad(pos_data)
         r = normalize_power(power_data)
+        r = power_data
 
         self.line.set_xdata(theta)
         self.line.set_ydata(r)

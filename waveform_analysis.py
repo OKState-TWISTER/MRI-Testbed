@@ -35,7 +35,7 @@ class WaveformProcessor:
         self.sym_rate = wf_struct["symbol_rate"]
         self.rcf_rolloff = wf_struct["rcf_rolloff"]
 
-        self.if_estimate = 4e9
+        self.if_estimate = 1.64e9
         self.sym2drop = 300.0
 
     def load_qam_waveform(self, filepath=None):
@@ -61,14 +61,21 @@ class WaveformProcessor:
         print("Begin processing waveform")
 
         # function [data, nsym, errors, SNR] = processQAM(mod_order, block_length, sym_rate, IF_estimate, symbols_to_drop, rcf_rolloff, original_samples, samp_rate, captured_samples, diagnostics_on)
-        mod_order = self.mod_order
-        block_length = self.block_length
-        symbol_rate = self.sym_rate
-        if_estimate = self.if_estimate
-        sym2drop = self.sym2drop
-        rcf_rolloff = self.rcf_rolloff
+        mod_order = matlab.double(self.mod_order)
+        block_length = matlab.double(self.block_length)
+        symbol_rate = matlab.double(self.sym_rate)
+        if_estimate = matlab.double(self.if_estimate)
+        sym2drop = matlab.double(self.sym2drop)
+        rcf_rolloff = matlab.double(self.rcf_rolloff)
         original_samples = self.org_samples
         captured_samples = matlab.double(captured_samples)
+
+        samp_rate = matlab.double(samp_rate)
+        print(len(samp_rate))
+        print(type(samp_rate))
+
+        print(len(captured_samples))
+        print(type(captured_samples))
 
         data, nsym, errors, SNR = self.eng.processQAM(mod_order, block_length, symbol_rate, if_estimate,
                                                       sym2drop, rcf_rolloff, original_samples,

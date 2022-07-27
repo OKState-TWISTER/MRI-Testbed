@@ -13,7 +13,7 @@ import os
 import sys
 import time
 
-from utils import catch_exceptions
+#from utils import catch_exceptions
 
 # load .net assemblies
 # sys.path.append()  # os.getcwd()
@@ -37,13 +37,13 @@ import Thorlabs.MotionControl.GenericMotorCLI.Settings
 
 
 class Kinesis:
-    @catch_exceptions
+    #@catch_exceptions
     def __init__(self, serial_number, debug, start_pos, zero_offset):
         self.debug = debug
         atexit.register(self.shutdown)
 
-        self.starting_angle = start_pos
-        self.zero_offset = zero_offset
+        self.starting_angle = float(start_pos)
+        self.zero_offset = float(zero_offset)
 
         # SimulationManager.Instance.InitializeSimulations() # only needed if using Kinesis simulator
 
@@ -89,17 +89,18 @@ class Kinesis:
             Thorlabs.MotionControl.GenericMotorCLI.Settings.RotationSettings.RotationDirections.Quickest,
         )
 
-    @catch_exceptions
+    #@catch_exceptions
     def shutdown(self):
         self.move_to(self.zero_offset)
         self.channel.StopPolling()
         self.device.ShutDown()
 
-    @catch_exceptions
+    #@catch_exceptions
     def home(self):
         print('Actuator is "Homing"')
         print(f"Start position: {self.starting_angle} : {self.starting_angle + self.zero_offset} (absolute)")
         self.move_to(self.starting_angle + self.zero_offset)
+        pos = float(self.channel.Position.ToString())
         if (pos := self.get_angle()) != (self.starting_angle + self.zero_offset):
             print(
                 f"Error homing stage. Desired angle: {self.starting_angle}  measured angle: {pos}"
@@ -109,13 +110,14 @@ class Kinesis:
             print("Stage is homed")
             return True
 
-    @catch_exceptions
+    #@catch_exceptions
     def get_angle(self):
         angle = self.channel.Position
         return float(angle.ToString())  # dirty type conversion
 
-    @catch_exceptions
+    #@catch_exceptions
     def move_to(self, angle):
+        angle = float(angle)
         if angle < 0:
             angle = angle + 360
         elif angle > 360:

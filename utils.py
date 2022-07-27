@@ -27,6 +27,6 @@ def normalize_power(power_data):
     power_rat = []
     for p in power_data:
         powernorm = p - pmax  # normalize max power to 0dB
-        prat = 10 ** (powernorm / 20)  # convert dB to ratio
+        prat = 10 ** (powernorm / 10)  # convert dB to ratio
         power_rat.append(prat)
     return power_rat
