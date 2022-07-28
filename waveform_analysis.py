@@ -40,13 +40,16 @@ class WaveformProcessor:
 
     def load_qam_waveform(self, filepath=None):
         while filepath is None:
-            file = input("Enter original waveform filename (.mat): ")
-            file = os.path.normpath(file)
-            if os.path.isfile(file) and file.endswith(".mat"):
-                filepath = file
-                break
-            else:
-                print("Please enter a valid filename")
+            files = [file for file in os.listdir() if file.endswith(".mat")]
+            for idx, filename in enumerate(files):
+                print(f"{idx}: {filename}")
+
+            index = int(input("Choose original waveform filename (enter number): "))
+            try:
+                filepath = files[index]
+            except IndexError:
+                print("Please enter a valid choice")
+                continue
 
         struct = self.eng.load(filepath)
         try:
@@ -115,7 +118,7 @@ if __name__ == '__main__':
     captured_waveform_filename = ""  # this is the python object file (.pkl)
 
 
-    proc = WaveformProcessor(True, original_waveform_filename)
+    proc = WaveformProcessor(True)
 
     with open(captured_waveform_filename, 'rb') as inp:
         waveform = pickle.load(inp)
