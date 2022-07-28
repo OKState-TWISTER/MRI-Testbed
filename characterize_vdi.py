@@ -39,7 +39,7 @@ BER_test = True  # Set to 'False' to take simple signal amplitude measurements
 
 # Various mode controls
 debug = False  # prints a whole lot of debug info
-processor_debug = False  # performs a single shot measurement, dumps waveform to file
+processor_debug = True  # performs a single shot measurement (ignores rotation stage), dumps waveform to file
 
 
 def main():
@@ -116,6 +116,8 @@ def main():
                     row = (data[0][i], data[1][i])
                     csvwriter.writerow(row)
 
+            plot.print_report()
+
         else:  # if processor_debug mode
             if mode == "amplitude":
                 measure_amplitude(scope, averaging_time, dump=True)
@@ -126,8 +128,6 @@ def main():
         pass
 
     print("Test complete.")
-
-    plot.print_report()
 
 
 ###############################################################################
@@ -161,10 +161,13 @@ def measure_ser(scope, waveform_proc, dump=False):
 
 def dump_waveform(waveform, samp_rate):
     plot.figure(1)
-    plot.plot(waveform)
-    plot.title("Waveform dump")
+    plot.plot(waveform[:500])
+    plot.title("Waveform dump (first 500 samples)")
+    # plot.show()  # TODO: change number of samples to show to a useful ammount (based on samplerate)
+    # TODO: dont halt program on waveform plot
 
-    datafile = os.path.join(save_dir, destination_filename + ".pkl")
+    datafile = os.path.join(save_dir, destination_filename + "_waveform.pkl")
+    print(f"\nSaving {len(waveform)} samples at rate {samp_rate} smp/s to {datafile}\n")
     with open(datafile, 'wb') as outp:
         pickle.dump(waveform, outp, pickle.HIGHEST_PROTOCOL)
         pickle.dump(samp_rate, outp, pickle.HIGHEST_PROTOCOL)

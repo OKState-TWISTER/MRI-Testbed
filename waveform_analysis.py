@@ -40,6 +40,7 @@ class WaveformProcessor:
 
     def load_qam_waveform(self, filepath=None):
         while filepath is None:
+            print()
             files = [file for file in os.listdir() if file.endswith(".mat")]
             for idx, filename in enumerate(files):
                 print(f"{idx}: {filename}")
