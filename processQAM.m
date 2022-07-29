@@ -47,7 +47,7 @@ end
 
 %% MIX WITH THE LOCAL OSCILLATOR
 % Mix the signal
-signal = signal.*exp(1j*2*pi*f_LO*time);
+signal = signal.*exp(-1j*2*pi*f_LO*time);
 
 % Diagnostics
 if diagnostics_on
