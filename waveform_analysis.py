@@ -52,6 +52,8 @@ class WaveformProcessor:
                 print("Please enter a valid choice")
                 continue
 
+        print(f"Loading waveform file '{filepath}'")
+
         struct = self.eng.load(filepath)
         try:
             wf_struct = struct["original"]
@@ -115,15 +117,14 @@ if __name__ == '__main__':
     import matplotlib.pyplot as plt
     import pickle
 
-    original_waveform_filename = "M4N5_Permutation_Sequence.mat"  # this is the matlab file with the waveform
     captured_waveform_filename = ""  # this is the python object file (.pkl)
-
-
-    proc = WaveformProcessor(True)
 
     with open(captured_waveform_filename, 'rb') as inp:
         waveform = pickle.load(inp)
         samp_rate = pickle.load(inp)
+        original_waveform_filename = pickle.load(inp)
+
+    proc = WaveformProcessor(True, original_waveform_filename)
 
     plt.figure(1)
     plt.plot(waveform)

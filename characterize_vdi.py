@@ -1,4 +1,4 @@
-# v2.2b1
+# v2.2b2
 
 """
 This program serves to automatically profile VDI modules by controlling various components:
@@ -43,6 +43,8 @@ processor_debug = True  # performs a single shot measurement (ignores rotation s
 
 
 def main():
+    if processor_debug:
+        print("\nWarning: Waveform processor debug mode is enabled\n")
     settings = IO(debug)  # prompt user for settings
 
     global save_dir
@@ -94,12 +96,12 @@ def main():
                 if mode == "amplitude":
                     datapoint = measure_amplitude(scope, averaging_time)
                 elif mode == "ser":
-                    datapoint = measure_ser(scope, waveform_proc)
+                    datapoint = measure_ber(scope, waveform_proc)
 
                 data[0].append(current_pos - zero_offset)
                 data[1].append(datapoint)
 
-                plot.update(data)
+                plot.update(data, mode == "ser")
 
                 print("Stage is moving")
                 # Be very careful when moving the stage to not wrap coax
@@ -122,7 +124,8 @@ def main():
             if mode == "amplitude":
                 measure_amplitude(scope, averaging_time, dump=True)
             elif mode == "ser":
-                measure_ser(scope, waveform_proc, dump=True)
+                measure_ber(scope, waveform_proc, dump=True)
+            input("Press any key to continue.")
 
     except KeyboardInterrupt:
         pass
@@ -147,7 +150,7 @@ def measure_amplitude(scope, averaging_time, dump=False):
     return datapoint
 
 
-def measure_ser(scope, waveform_proc, dump=False):
+def measure_ber(scope, waveform_proc, dump=False):
     waveform = scope.get_waveform_words()
     waveform = [float(dat) for dat in waveform]
     samp_rate = float(scope.get_sample_rate())
@@ -155,8 +158,8 @@ def measure_ser(scope, waveform_proc, dump=False):
     if dump:
         dump_waveform(waveform, samp_rate)
 
-    ser = waveform_proc.process_qam(samp_rate, waveform)
-    return ser
+    ber = waveform_proc.process_qam(samp_rate, waveform)
+    return ber
 
 
 def dump_waveform(waveform, samp_rate):
@@ -193,12 +196,16 @@ class Custom_Plot:
         # self.axis.set_yticks(range(-24, 6, 6))
         self.axis.set_title(description)
 
-    def update(self, data):
+    def update(self, data, bermode):
         self.data = data
-        pos_data, power_data = data
-        theta = deg_to_rad(pos_data)
-        r = normalize_power(power_data)
+        angle_data, r_data = data
+        theta = deg_to_rad(angle_data)
 
+        if bermode:
+            r = r_data
+        else:
+            r = normalize_power(r_data)
+        
         self.line.set_xdata(theta)
         self.line.set_ydata(r)
         self.fig.canvas.draw()
