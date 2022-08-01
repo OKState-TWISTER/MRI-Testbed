@@ -45,6 +45,7 @@ class WaveformProcessor:
             for idx, filename in enumerate(files):
                 print(f"{idx}: {filename}")
 
+            # TODO: fix error if user enters a non int
             index = int(input("Choose original waveform filename (enter number): "))
             try:
                 filepath = files[index]

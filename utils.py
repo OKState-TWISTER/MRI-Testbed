@@ -30,3 +30,10 @@ def normalize_power(power_data):
         prat = 10 ** (powernorm / 10)  # convert dB to ratio
         power_rat.append(prat)
     return power_rat
+
+def normalize_data(data):
+    dmax = max(data)
+    norm_data = []
+    for point in data:
+        norm_data.append(point - dmax)
+    return norm_data
