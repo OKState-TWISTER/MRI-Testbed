@@ -42,6 +42,7 @@ signal = signal/max(abs(signal));
 % Diagnostics
 if diagnostics_on
     figure(1); clf; hold on;
+    title("Normalized Signal")
     plot(time_full, signal);
 end
 
@@ -52,7 +53,9 @@ signal = signal.*exp(-1j*2*pi*f_LO*time);
 % Diagnostics
 if diagnostics_on
     figure(100); clf; hold on;
-    plot(8*signal, '.', 'MarkerSize', 5);
+    title("Mixed signal")
+    plot(signal, '.', 'MarkerSize', 5);
+    % plot(8*signal, '.', 'MarkerSize', 5);
 end
 
 %% AUTOMATIC GAIN CONTROL
@@ -70,10 +73,12 @@ if diagnostics_on
     
     % Main plot
     figure(100);
+    title("AGC")
     plot(2*signal, '.', 'MarkerSize', 4);
     
     % Power amplification level
     figure(1); clf;
+    title("Power amplification level")
     plot(time, powerLevel);
     xlabel("Time (s)"); ylabel("Power (units?)");
 end
@@ -96,6 +101,7 @@ if diagnostics_on
     
     % Main plot
     figure(100);
+    title("Filtering")
     plot(signal, '.', 'MarkerSize', 3);
 end
 
@@ -122,6 +128,7 @@ if diagnostics_on
     
     % Main plot
     figure(100);
+    title("Coarse freq comp")
     plot(signal, '.', 'MarkerSize', 2);
 end
 
@@ -143,6 +150,7 @@ if diagnostics_on
     
     % Main plot
     figure(100);
+    title("Symbol Sync")
     plot(signal, '.', 'MarkerSize', 1);
     
     % Timing error
@@ -174,6 +182,7 @@ if diagnostics_on
     
     % Main plot
     figure(100);
+        title("Carrier Sync")
         plot(signal, '.', 'MarkerSize', 1);
         
     % Phase error
@@ -348,4 +357,3 @@ data.samples = samples;
 
 
 end
-

@@ -35,7 +35,9 @@ class WaveformProcessor:
         self.sym_rate = wf_struct["symbol_rate"]
         self.rcf_rolloff = wf_struct["rcf_rolloff"]
 
+        # measured waveform center freq estimate
         self.if_estimate = 1.64e9
+        # throw away symbols corrupted by filter/PLL initilization
         self.sym2drop = 300.0
 
     def load_qam_waveform(self, filepath=None):
