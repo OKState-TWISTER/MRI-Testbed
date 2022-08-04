@@ -28,7 +28,7 @@ class WaveformProcessor:
         end = time()
         print(f"Done. Took {end - start} seconds.")
 
-        wf_struct = self.load_qam_waveform(org_waveform)
+        wf_struct, self.original_waveform = self.load_qam_waveform(org_waveform)
         self.mod_order = wf_struct["modulation_order"]
         self.block_length = wf_struct["block_length"]
         self.org_samples = wf_struct["samples"]
@@ -57,13 +57,21 @@ class WaveformProcessor:
 
         print(f"Loading waveform file '{filepath}'")
 
-        struct = self.eng.load(filepath)
+        if not os.path.isfile(filepath):
+            print(f"Error loading file {filepath}. File does not exist.")
+            sys.exit(-1)
+
         try:
+            struct = self.eng.load(filepath)
             wf_struct = struct["original"]
         except KeyError:
             print(f"\nError: no field named \"original\" in file {filepath}")
             sys.exit(-1)
-        return wf_struct
+        except Exception as e:
+            print(f"\nError loading file '{filepath}'\n{e}\n")
+            sys.exit(-1)
+        
+        return (wf_struct, filepath)
 
     def process_qam(self, samp_rate, captured_samples):
         start = time()
@@ -120,12 +128,16 @@ if __name__ == '__main__':
     import matplotlib.pyplot as plt
     import pickle
 
-    captured_waveform_filename = ""  # this is the python object file (.pkl)
+    captured_waveform_filename = "warmup-01082022_112216_waveform.pkl"  # this is the python object file (.pkl)
 
     with open(captured_waveform_filename, 'rb') as inp:
         waveform = pickle.load(inp)
         samp_rate = pickle.load(inp)
-        original_waveform_filename = pickle.load(inp)
+        try:
+            original_waveform_filename = pickle.load(inp)
+        except EOFError:
+            print(f"Original waveform filename not found in {captured_waveform_filename}")
+            original_waveform_filename = None
 
     proc = WaveformProcessor(True, original_waveform_filename)
 

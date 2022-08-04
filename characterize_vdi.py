@@ -1,4 +1,4 @@
-# v2.3
+# v2.4
 
 """
 This program serves to automatically profile VDI modules by controlling various components:
@@ -156,24 +156,29 @@ def measure_ber(scope, waveform_proc, dump=False):
     samp_rate = float(scope.get_sample_rate())
 
     if dump:
-        dump_waveform(waveform, samp_rate)
+        dump_waveform(waveform, samp_rate, waveform_proc.original_waveform)
 
     ber = waveform_proc.process_qam(samp_rate, waveform)
     return ber
 
 
-def dump_waveform(waveform, samp_rate):
+def dump_waveform(waveform, samp_rate, source_waveform=None):
     plt.figure(1)
     plt.plot(waveform[:500])
     plt.title("Waveform dump (first 500 samples)")
     # plot.show()  # TODO: change number of samples to show to a useful ammount (based on samplerate)
     # TODO: dont halt program on waveform plot
 
-    datafile = os.path.join(save_dir, destination_filename + "_waveform.pkl")
+    appendix = "_waveform_sn.pkl" if source_waveform else "_waveform.pkl"
+
+    datafile = os.path.join(save_dir, destination_filename + appendix)
+
     print(f"\nSaving {len(waveform)} samples at rate {samp_rate} smp/s to {datafile}\n")
     with open(datafile, 'wb') as outp:
         pickle.dump(waveform, outp, pickle.HIGHEST_PROTOCOL)
         pickle.dump(samp_rate, outp, pickle.HIGHEST_PROTOCOL)
+        if source_waveform:
+            pickle.dump(source_waveform, outp, pickle.HIGHEST_PROTOCOL)
 
 
 if __name__ == '__main__':
