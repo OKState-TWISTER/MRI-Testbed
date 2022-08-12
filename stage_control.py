@@ -95,7 +95,7 @@ class Kinesis:
         print('Actuator is "Homing"')
         print(f"Start position: {self.starting_angle} : {self.starting_angle + self.zero_offset} (absolute)")
         self.move_to(self.starting_angle + self.zero_offset)
-        if (pos := self.get_angle()) != (self.starting_angle + self.zero_offset):
+        if (pos := self.get_rel_angle()) != (self.starting_angle + self.zero_offset):
             print(
                 f"Error homing stage. Desired angle: {self.starting_angle}  measured angle: {pos}"
             )
@@ -104,14 +104,26 @@ class Kinesis:
             print("Stage is homed")
             return True
 
-    def get_angle(self):
+    def get_rel_angle(self):
+        angle = float(self.channel.Position.ToString())  # Dirty type conversion
+
+        # Return angle within (-180, 180)
+        if angle > 180:
+            angle = angle - 360
+        elif angle < -180:
+            angle = angle + 360
+
+        return angle
+
+    def get_abs_angle(self):
         angle = self.channel.Position
-        return float(angle.ToString())  # dirty type conversion
+
+        return float(angle.ToString()) # Dirty type conversion
 
     def move_to(self, angle):
         angle = float(angle)
         if angle < 0:
             angle = angle + 360
         elif angle > 360:
-            angle = angle + 360
+            angle = angle - 360
         self.channel.MoveTo(System.Decimal(angle), 60000)

@@ -42,7 +42,7 @@ class Infiniium:
         self.infiniium.close()
 
     def get_fft_peak(self):
-        power = self.do_query(":FUNCtion4:FFT:PEAK:MAGNitude?").strip().replace('"', "")
+        power = self.do_query(":FUNCtion2:FFT:PEAK:MAGNitude?").strip().replace('"', "")
         if "9.99999E+37" in power:
             power = "-9999"
         return float(power)

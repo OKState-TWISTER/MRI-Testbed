@@ -1,4 +1,4 @@
-# v2.4
+# v2.5
 
 """
 This program serves to automatically profile VDI modules by controlling various components:
@@ -6,6 +6,9 @@ A Thorlabs HDR50 rotator stage connected to a BSC201 controller positions the TX
 A Keysight DSOV254A oscilloscope captures received waveforms
 The captured waveforms are analyzed using various MATLAB functions
 """
+
+# TODO: add option to save multiple waveform data
+
 
 # TODO:
 # control speed of rotator
@@ -33,8 +36,6 @@ visa_address = "USB0::0x2A8D::0x9027::MY59190106::0::INSTR"  # VISA address for 
 
 date_time = datetime.datetime.now().strftime("%d%m%Y_%H%M%S")
 output_dir = "Data"
-
-BER_test = True  # Set to 'False' to take simple signal amplitude measurements
 
 # Various mode controls
 debug = False  # prints a whole lot of debug info
@@ -86,7 +87,7 @@ def main():
     try:
         if not processor_debug:
             plot = Custom_Plot(settings.desc, mode, save_dir, destination_filename)
-            current_pos = stage.get_angle()
+            current_pos = stage.get_rel_angle()
             data = [[], []]
 
             while current_pos > ending_angle:
@@ -97,7 +98,7 @@ def main():
                 elif mode == "ser":
                     datapoint = measure_ber(scope, waveform_proc)
 
-                data[0].append(current_pos - zero_offset)
+                data[0].append(stage.get_abs_angle() - zero_offset)
                 data[1].append(datapoint)
 
                 plot.update(data)
@@ -105,9 +106,7 @@ def main():
                 print("Stage is moving")
                 # Be very careful when moving the stage to not wrap coax
                 stage.move_to(current_pos - step_size)
-                current_pos = stage.get_angle()
-                if current_pos > starting_angle:
-                    current_pos = current_pos - 360
+                current_pos = stage.get_rel_angle()
 
             data_dest = os.path.join(save_dir, destination_filename + ".csv")
             print(f"writing data to {data_dest}")
@@ -137,6 +136,8 @@ def main():
 
 
 def measure_amplitude(scope, averaging_time, dump=False):
+    # Reset averaging
+    scope.do_command(":CDISplay")
     time.sleep(averaging_time)
     datapoint = scope.get_fft_peak()
     # TODO: make sure peak is at correct frequency
@@ -154,6 +155,8 @@ def measure_ber(scope, waveform_proc, dump=False):
     waveform = scope.get_waveform_words()
     waveform = [float(dat) for dat in waveform]
     samp_rate = float(scope.get_sample_rate())
+    if debug:
+        print(f"Captured sample rate: '{samp_rate}'")
 
     if dump:
         dump_waveform(waveform, samp_rate, waveform_proc.original_waveform)

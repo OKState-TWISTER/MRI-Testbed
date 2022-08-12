@@ -9,6 +9,7 @@ https://www.mathworks.com/help/matlab/matlab_external/call-user-script-and-funct
 """
 
 import math
+from multiprocessing.sharedctypes import Value
 import os
 import sys
 from time import time
@@ -36,7 +37,7 @@ class WaveformProcessor:
         self.rcf_rolloff = wf_struct["rcf_rolloff"]
 
         # measured waveform center freq estimate
-        self.if_estimate = 1.64e9
+        self.if_estimate = 12.8e9
         # throw away symbols corrupted by filter/PLL initilization
         self.sym2drop = 300.0
 
@@ -47,12 +48,14 @@ class WaveformProcessor:
             for idx, filename in enumerate(files):
                 print(f"{idx}: {filename}")
 
-            # TODO: fix error if user enters a non int
-            index = int(input("Choose original waveform filename (enter number): "))
             try:
+                index = int(input("Choose original waveform filename (enter number): "))
                 filepath = files[index]
+            except ValueError:
+                print("Please enter a value")
             except IndexError:
                 print("Please enter a valid choice")
+            finally:
                 continue
 
         print(f"Loading waveform file '{filepath}'")
