@@ -1,4 +1,4 @@
-# v2.5
+# v2.6a1
 
 """
 This program serves to automatically profile VDI modules by controlling various components:
@@ -26,7 +26,7 @@ import pickle
 from plot import Custom_Plot
 from stage_control import Kinesis
 from scope_control import Infiniium
-from user_interface import IO
+from user_interface import UserSettings
 from waveform_analysis import WaveformProcessor
 
 
@@ -45,14 +45,7 @@ processor_debug = False  # performs a single shot measurement (ignores rotation 
 def main():
     if processor_debug:
         print("\nWarning: Waveform processor debug mode is enabled\n")
-    settings = IO(debug)  # prompt user for settings
-
-    global save_dir
-    save_dir = os.path.join(output_dir, os.path.normpath(settings.test_series()))
-    if not os.path.exists(save_dir):
-        os.makedirs(save_dir)
-    global destination_filename
-    destination_filename = f"{settings.desc}-{date_time}"
+    settings = UserSettings(debug)  # prompt user for settings
 
     starting_angle = float(settings.starting_pos())
     ending_angle = float(settings.ending_pos())
@@ -60,6 +53,22 @@ def main():
     averaging_time = float(settings.averaging_time())
     zero_offset = float(settings.zero_offset())
     mode = settings.mode()
+    save_waveforms = settings.save_waveforms() == "true"
+    waveform_count = int(settings.waveform_count())
+
+    # create save destination
+    global save_dir
+    save_dir = os.path.join(output_dir, os.path.normpath(settings.test_series()))
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+    global destination_filename
+    destination_filename = f"{settings.desc}_{date_time}"
+    if save_waveform:
+        global waveform_dir
+        waveform_dir = os.path.join(save_dir, destination_filename + "_waveforms")
+        if not os.path.exists(waveform_dir):
+            os.makedirs(waveform_dir)
+
 
     # Initialize DSO (scope_control.py)
     scope = Infiniium(visa_address, debug)
@@ -93,10 +102,20 @@ def main():
             while current_pos > ending_angle:
                 print(f"Stage position: {current_pos} (absolute) {current_pos - zero_offset} (effective)")
 
-                if mode == "amplitude":
+                if mode == "cw":
                     datapoint = measure_amplitude(scope, averaging_time)
-                elif mode == "ser":
-                    datapoint = measure_ber(scope, waveform_proc)
+                elif mode == "ber":
+                    n = waveform_count
+                    while True:
+                        (datapoint, waveform, samp_rate) = measure_ber(scope, waveform_proc)
+
+                        if not save_waveforms:
+                            break
+                        else:
+                            save_waveform(waveform, samp_rate, n, current_pos)
+                            n -= 1
+                            if n == 0:
+                                break
 
                 data[0].append(stage.get_abs_angle() - zero_offset)
                 data[1].append(datapoint)
@@ -119,9 +138,9 @@ def main():
             plot.print_report()
 
         else:  # if processor_debug mode
-            if mode == "amplitude":
+            if mode == "cw":
                 measure_amplitude(scope, averaging_time, dump=True)
-            elif mode == "ser":
+            elif mode == "ber":
                 measure_ber(scope, waveform_proc, dump=True)
 
         input("Press any key to exit")
@@ -162,7 +181,7 @@ def measure_ber(scope, waveform_proc, dump=False):
         dump_waveform(waveform, samp_rate, waveform_proc.original_waveform)
 
     ber = waveform_proc.process_qam(samp_rate, waveform)
-    return ber
+    return (ber, waveform, samp_rate)
 
 
 def dump_waveform(waveform, samp_rate, source_waveform=None):
@@ -182,6 +201,17 @@ def dump_waveform(waveform, samp_rate, source_waveform=None):
         pickle.dump(samp_rate, outp, pickle.HIGHEST_PROTOCOL)
         if source_waveform:
             pickle.dump(source_waveform, outp, pickle.HIGHEST_PROTOCOL)
+
+
+def save_waveform(waveform, samp_rate, n, position):
+    print(waveform)
+
+    datafile = os.path.join(waveform_dir, f"{position}_{n}")
+
+    with open(datafile, 'wb') as outp:
+        outp.write()
+
+
 
 
 if __name__ == '__main__':
