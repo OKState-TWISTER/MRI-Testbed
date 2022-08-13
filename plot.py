@@ -45,11 +45,12 @@ class Custom_Plot:
         self.fig.canvas.draw()
         self.fig.canvas.flush_events()
 
-    def print_report(self):
+    def print_report(self, mode):
+        unit = "dBm" if mode == "cw" else "errors"
         self.fig.savefig(
             os.path.join(self.save_dir, self.dest_filename + ".png")
         )
-        print(f"Max value: {max(self.data[1])} dBm")
+        print(f"Max value: {max(self.data[1])} {unit}")
 
 
 if __name__ == '__main__':

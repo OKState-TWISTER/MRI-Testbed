@@ -37,7 +37,7 @@ class WaveformProcessor:
         self.rcf_rolloff = wf_struct["rcf_rolloff"]
 
         # measured waveform center freq estimate
-        self.if_estimate = 12.8e9
+        self.if_estimate = 6.18e9
         # throw away symbols corrupted by filter/PLL initilization
         self.sym2drop = 300.0
 
@@ -79,6 +79,8 @@ class WaveformProcessor:
     def process_qam(self, samp_rate, captured_samples):
         start = time()
         print("Begin processing waveform")
+
+        #captured_samples = [float(dat) for dat in captured_samples]
 
         # function [data, nsym, errors, SNR] = processQAM(mod_order, block_length, sym_rate, IF_estimate, symbols_to_drop, rcf_rolloff, original_samples, samp_rate, captured_samples, diagnostics_on)
         mod_order = matlab.double(self.mod_order)

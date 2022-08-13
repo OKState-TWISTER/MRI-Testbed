@@ -1,4 +1,4 @@
-# v2.6a1
+# v2.6b1
 
 """
 This program serves to automatically profile VDI modules by controlling various components:
@@ -7,13 +7,11 @@ A Keysight DSOV254A oscilloscope captures received waveforms
 The captured waveforms are analyzed using various MATLAB functions
 """
 
-# TODO: add option to save multiple waveform data
-
-
 # TODO:
 # control speed of rotator
 
 # import libraries
+from array import array
 import csv
 import datetime
 import os
@@ -47,14 +45,18 @@ def main():
         print("\nWarning: Waveform processor debug mode is enabled\n")
     settings = UserSettings(debug)  # prompt user for settings
 
+    mode = settings.mode()
     starting_angle = float(settings.starting_pos())
     ending_angle = float(settings.ending_pos())
     step_size = float(settings.step_size())
-    averaging_time = float(settings.averaging_time())
     zero_offset = float(settings.zero_offset())
-    mode = settings.mode()
-    save_waveforms = settings.save_waveforms() == "true"
-    waveform_count = int(settings.waveform_count())
+
+    # TODO: have UserSettings handle casting types
+    if mode == "cw":
+        averaging_time = float(settings.averaging_time())
+    if mode == "ber":
+        save_waveforms = settings.save_waveforms() == "true"
+        waveform_count = int(settings.waveform_count())
 
     # create save destination
     global save_dir
@@ -77,17 +79,19 @@ def main():
         # Initialize rotation stage (stage_control.py)
         stage = Kinesis(serial_num, debug, starting_angle, zero_offset)
 
-    if mode == "ser":
+    if mode == "ber":
+        
         # Initialize MATLAB Engine (waveform analysis.py)
-        waveform_proc = WaveformProcessor(debug=True)
+        waveform_proc = WaveformProcessor(debug=not save_waveforms)
 
     if not processor_debug:
         if not stage.home():
             print("Error when homing stage")
             sys.exit(-1)
 
-        test_length = (starting_angle - ending_angle) / step_size * averaging_time / 60
-        print(f"Test will take {test_length} minutes to complete.")
+        # TODO: have an updating estimation for remaining time
+        #test_length = (starting_angle - ending_angle) / step_size * averaging_time / 60
+        #print(f"Test will take {test_length} minutes to complete.")
 
     input("Press any key to begin")
 
@@ -99,22 +103,26 @@ def main():
             current_pos = stage.get_rel_angle()
             data = [[], []]
 
-            while current_pos > ending_angle:
+            while current_pos >= ending_angle:
                 print(f"Stage position: {current_pos} (absolute) {current_pos - zero_offset} (effective)")
 
                 if mode == "cw":
                     datapoint = measure_amplitude(scope, averaging_time)
                 elif mode == "ber":
+                    datapoint = 0
                     n = waveform_count
                     while True:
-                        (datapoint, waveform, samp_rate) = measure_ber(scope, waveform_proc)
+                        (ber, waveform, samp_rate) = measure_ber(scope, waveform_proc)
 
                         if not save_waveforms:
+                            datapoint = ber
                             break
                         else:
+                            datapoint += ber
                             save_waveform(waveform, samp_rate, n, current_pos)
                             n -= 1
                             if n == 0:
+                                datapoint = datapoint / waveform_count
                                 break
 
                 data[0].append(stage.get_abs_angle() - zero_offset)
@@ -135,7 +143,7 @@ def main():
                     row = (data[0][i], data[1][i])
                     csvwriter.writerow(row)
 
-            plot.print_report()
+            plot.print_report(mode)
 
         else:  # if processor_debug mode
             if mode == "cw":
@@ -172,7 +180,6 @@ def measure_amplitude(scope, averaging_time, dump=False):
 
 def measure_ber(scope, waveform_proc, dump=False):
     waveform = scope.get_waveform_words()
-    waveform = [float(dat) for dat in waveform]
     samp_rate = float(scope.get_sample_rate())
     if debug:
         print(f"Captured sample rate: '{samp_rate}'")
@@ -181,6 +188,7 @@ def measure_ber(scope, waveform_proc, dump=False):
         dump_waveform(waveform, samp_rate, waveform_proc.original_waveform)
 
     ber = waveform_proc.process_qam(samp_rate, waveform)
+
     return (ber, waveform, samp_rate)
 
 
@@ -204,12 +212,12 @@ def dump_waveform(waveform, samp_rate, source_waveform=None):
 
 
 def save_waveform(waveform, samp_rate, n, position):
-    print(waveform)
+    data = array('i', waveform)
 
     datafile = os.path.join(waveform_dir, f"{position}_{n}")
 
     with open(datafile, 'wb') as outp:
-        outp.write()
+        data.tofile(outp)
 
 
 

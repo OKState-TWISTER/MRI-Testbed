@@ -13,8 +13,6 @@ signal = captured_samples;
 sample_rate = samp_rate; % Oscilloscope sample rate.
 f_LO = IF_estimate;
 
-fprintf("Modulation Order is %.0f", M);
-
 original_sample_frame = original_samples;
 original_symbol_frame = qamdemod(original_sample_frame, M);
 
@@ -240,7 +238,6 @@ samples = samples_full((end-block_length*n_frames+1):end);
 % The first thing to do is to align the measured and original symbols
 
 % Set up for the shift-determination loop
-fprintf("%.0f", length(original_symbols))
 header = original_symbols(1:32); % Look for this pattern in the RX data.
 shifts = 1:(length(original_symbols)-length(header));
 n_errors_min = numel(samples);
