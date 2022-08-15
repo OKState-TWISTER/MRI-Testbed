@@ -143,7 +143,7 @@ def main():
                     row = (data[0][i], data[1][i])
                     csvwriter.writerow(row)
 
-            plot.print_report(mode)
+            plot.print_report()
 
         else:  # if processor_debug mode
             if mode == "cw":
