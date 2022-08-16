@@ -27,7 +27,8 @@ class UserSettings:
         # Modulated
         self.save_waveforms = Setting("save waveforms", description="should every waveform capture be saved to a file for further analysis", valid_values=['t', 'f', 'y', 'n', '1', '0'], bool=True)
         self.waveform_count = Setting("waveform count", description="how many waveforms should be captured at each position (ignored if save waveforms is false)")
-        
+        self.if_estimate = Setting("if estimate", description="todo")
+
 
         self.settings_file = os.path.join(
             pathlib.Path(__file__).parent.absolute(), settings_filename
@@ -49,6 +50,7 @@ class UserSettings:
         mt_settings = {
             "save_waveforms": self.save_waveforms,
             "waveform_count": self.waveform_count,
+            "if_estimate": self.if_estimate,
         }
 
         self.load(gen_settings)

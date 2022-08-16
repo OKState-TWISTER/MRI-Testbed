@@ -40,7 +40,6 @@ class Custom_Plot:
         angle_data, r_data = data
         theta = deg_to_rad(angle_data)
 
-        theta = angle_data
         r = r_data
         
         self.line.set_xdata(theta)

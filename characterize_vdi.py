@@ -57,6 +57,7 @@ def main():
     if mode == "ber":
         save_waveforms = settings.save_waveforms() == "true"
         waveform_count = int(settings.waveform_count())
+        if_estimate = float(settings.if_estimate())
 
     # create save destination
     global save_dir
@@ -82,7 +83,7 @@ def main():
     if mode == "ber":
         
         # Initialize MATLAB Engine (waveform analysis.py)
-        waveform_proc = WaveformProcessor(debug=not save_waveforms)
+        waveform_proc = WaveformProcessor(if_estimate=if_estimate, debug=not save_waveforms)
 
     if not processor_debug:
         if not stage.home():
