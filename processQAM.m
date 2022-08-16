@@ -48,7 +48,7 @@ end
 
 %% MIX WITH THE LOCAL OSCILLATOR
 % Mix the signal
-signal = signal.*exp(-1j*2*pi*f_LO*time);
+signal = signal.*exp(1j*2*pi*f_LO*time);
 
 % Diagnostics
 if diagnostics_on
@@ -208,13 +208,14 @@ time_samples_full = time_samples_full(start:stop);
 
 % Calculate the number of frames we should expect.
 t_frame = block_length/symbol_rate; % The time spanned by a single frame.
-n_frames = floor(time(end)/t_frame);
+n_frames = floor((time_samples_full(end)-time_samples_full(1))/t_frame);
 
 % Duplicate the original symbol vector to match measured sample dimensions.
 original_symbols = repmat(original_symbol_frame, n_frames, 1);
 original_samples = repmat(original_sample_frame, n_frames, 1);
 
 % Create symbol time vector (subset of the full-length symbol-time vector)
+fprintf("%.0f, %.0f, %.0f\n", block_length, n_frames, block_length*n_frames);
 time_samples = time_samples_full(1:(block_length*n_frames));
 
 % Now, trim the sample vector to be exactly an integer multiple of the 
@@ -238,7 +239,7 @@ samples = samples_full((end-block_length*n_frames+1):end);
 % The first thing to do is to align the measured and original symbols
 
 % Set up for the shift-determination loop
-header = original_symbols(1:32); % Look for this pattern in the RX data.
+header = original_symbols(1:16 ); % Look for this pattern in the RX data.
 shifts = 1:(length(original_symbols)-length(header));
 n_errors_min = numel(samples);
 phi_0_ideal = 0;

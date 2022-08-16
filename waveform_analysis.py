@@ -20,7 +20,7 @@ import matlab.engine
 
 
 class WaveformProcessor:
-    def __init__(self, debug=False, org_waveform=None):
+    def __init__(self, if_estimate=None, debug=False, org_waveform=None):
         self.debug = debug
 
         print("Initializing MATLAB engine")
@@ -37,7 +37,7 @@ class WaveformProcessor:
         self.rcf_rolloff = wf_struct["rcf_rolloff"]
 
         # measured waveform center freq estimate
-        self.if_estimate = 6.18e9
+        self.if_estimate = if_estimate
         # throw away symbols corrupted by filter/PLL initilization
         self.sym2drop = 300.0
 
