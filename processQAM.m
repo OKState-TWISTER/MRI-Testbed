@@ -139,7 +139,7 @@ symbolSync = comm.SymbolSynchronizer;
     symbolSync.TimingErrorDetector = 'Gardner (non-data-aided)';
     symbolSync.SamplesPerSymbol = sps;
     symbolSync.DampingFactor = 1;
-    symbolSync.NormalizedLoopBandwidth = 0.001;
+    symbolSync.NormalizedLoopBandwidth = 0.005;
     symbolSync.DetectorGain = 1;
 
 %signal(isnan(signal)) = 0;

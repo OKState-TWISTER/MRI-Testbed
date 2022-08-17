@@ -39,7 +39,7 @@ class WaveformProcessor:
         # measured waveform center freq estimate
         self.if_estimate = if_estimate
         # throw away symbols corrupted by filter/PLL initilization
-        self.sym2drop = 300.0
+        self.sym2drop = 600.0
 
     def load_qam_waveform(self, filepath=None):
         while filepath is None:

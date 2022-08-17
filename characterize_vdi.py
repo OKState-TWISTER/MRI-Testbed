@@ -37,7 +37,7 @@ output_dir = "Data"
 
 # Various mode controls
 debug = False  # prints a whole lot of debug info
-processor_debug = False  # performs a single shot measurement (ignores rotation stage), dumps waveform to file
+processor_debug = True  # performs a single shot measurement (ignores rotation stage), dumps waveform to file
 
 
 def main():
@@ -83,7 +83,7 @@ def main():
     if mode == "ber":
         
         # Initialize MATLAB Engine (waveform analysis.py)
-        waveform_proc = WaveformProcessor(if_estimate=if_estimate, debug=not save_waveforms)
+        waveform_proc = WaveformProcessor(if_estimate=if_estimate, debug=True) #debug=not save_waveforms
 
     if not processor_debug:
         if not stage.home():
@@ -150,7 +150,22 @@ def main():
             if mode == "cw":
                 measure_amplitude(scope, averaging_time, dump=True)
             elif mode == "ber":
-                measure_ber(scope, waveform_proc, dump=True)
+                datapoint = 0
+                n = waveform_count
+                current_pos = 0
+                while True:
+                    (ber, waveform, samp_rate) = measure_ber(scope, waveform_proc)
+
+                    if not save_waveforms:
+                        datapoint = ber
+                        break
+                    else:
+                        datapoint += ber
+                        save_waveform(waveform, samp_rate, n, current_pos)
+                        n -= 1
+                        if n == 0:
+                            datapoint = datapoint / waveform_count
+                            break
 
         input("Press any key to exit")
 

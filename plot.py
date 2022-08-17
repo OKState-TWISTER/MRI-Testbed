@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy
 import os
 
-from utils import deg_to_rad, normalize_power
+from utils import deg_to_rad, to_log
 
 class Custom_Plot:
     def __init__(self, description, mode, save_dir, dest_filename):
@@ -22,13 +22,15 @@ class Custom_Plot:
         self.axis.set_theta_zero_location("N")
         (self.line,) = self.axis.plot([],[])
         self.label_position = self.axis.get_rlabel_position()
-        self.axis.set_title(description)
+        
+        title = "BER (log10) " if mode == "ber" else "Received Power "
+        self.axis.set_title(title + str(description))
 
-        units = "magical BER units" if mode == "ser" else "dB"
-        self.text = self.axis.text( #  Why doesn't this do anything
+        units = "errors" if mode == "ber" else "dB"
+        self.text = self.axis.text(
             numpy.radians(self.label_position),
             2,
-            "dBm",
+            units,
             rotation=self.label_position,
             ha="center",
             va="center",
@@ -40,7 +42,8 @@ class Custom_Plot:
         angle_data, r_data = data
         theta = deg_to_rad(angle_data)
 
-        r = r_data
+        
+        r = to_log(r_data) if self.mode == "ber" else r_data
         
         self.line.set_xdata(theta)
         self.line.set_ydata(r)
@@ -48,7 +51,7 @@ class Custom_Plot:
         self.text.set(position=(numpy.radians(self.label_position), max(r) + 1))
 
         self.axis.set_ylim(min(r), max(r))
-        # recompute the ax.dataLim
+        # recompute the axis.dataLim
         self.axis.relim()
         # update ax.viewLim using the new dataLim
         self.axis.autoscale_view()
@@ -69,7 +72,7 @@ if __name__ == '__main__':
 
     size = 10
  
-    plot = Custom_Plot("test description", "amplitude", "trash", "trash")
+    plot = Custom_Plot("test description", "ber", "trash", "trash")
 
     data = [[], []]
 

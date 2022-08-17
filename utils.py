@@ -37,3 +37,6 @@ def normalize_data(data):
     for point in data:
         norm_data.append(point - dmax)
     return norm_data
+
+def to_log(data):
+    return [math.log10(point) for point in data]
