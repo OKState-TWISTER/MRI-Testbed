@@ -1,4 +1,4 @@
-# v2.6b1
+# v2.7b1
 
 """
 This program serves to automatically profile VDI modules by controlling various components:
@@ -32,17 +32,18 @@ from waveform_analysis import WaveformProcessor
 serial_num = "40163084"  # Serial number for rotation stage
 visa_address = "USB0::0x2A8D::0x9027::MY59190106::0::INSTR"  # VISA address for DSO
 
-date_time = datetime.datetime.now().strftime("%d%m%Y_%H%M%S")
+date_time = datetime.datetime.now().isoformat(timespec="minutes")
 output_dir = "Data"
 
 # Various mode controls
 debug = False  # prints a whole lot of debug info
-processor_debug = True  # performs a single shot measurement (ignores rotation stage), dumps waveform to file
+ignore_rotator = False  # performs a single shot measurement (ignores rotation stage), dumps waveform to file
 
 
 def main():
-    if processor_debug:
-        print("\nWarning: Waveform processor debug mode is enabled\n")
+    if ignore_rotator:
+        print("\nWarning: Rotation stage disabled\n")
+
     settings = UserSettings(debug)  # prompt user for settings
 
     mode = settings.mode()
@@ -50,22 +51,24 @@ def main():
     ending_angle = float(settings.ending_pos())
     step_size = float(settings.step_size())
     zero_offset = float(settings.zero_offset())
+    save_waveforms = settings.save_waveforms() == "true"
 
     # TODO: have UserSettings handle casting types
     if mode == "cw":
         averaging_time = float(settings.averaging_time())
     if mode == "ber":
-        save_waveforms = settings.save_waveforms() == "true"
-        waveform_count = int(settings.waveform_count())
         if_estimate = float(settings.if_estimate())
+        if save_waveform:
+            waveform_count = int(settings.waveform_count())
 
-    # create save destination
+    # Create save destination
     global save_dir
     save_dir = os.path.join(output_dir, os.path.normpath(settings.test_series()))
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
     global destination_filename
     destination_filename = f"{settings.desc}_{date_time}"
+
     if save_waveform:
         global waveform_dir
         waveform_dir = os.path.join(save_dir, destination_filename + "_waveforms")
@@ -76,30 +79,43 @@ def main():
     # Initialize DSO (scope_control.py)
     scope = Infiniium(visa_address, debug)
 
-    if not processor_debug:
+    if not ignore_rotator:
         # Initialize rotation stage (stage_control.py)
         stage = Kinesis(serial_num, debug, starting_angle, zero_offset)
 
     if mode == "ber":
-        
         # Initialize MATLAB Engine (waveform analysis.py)
         waveform_proc = WaveformProcessor(if_estimate=if_estimate, debug=True) #debug=not save_waveforms
 
-    if not processor_debug:
+    if not ignore_rotator:
         if not stage.home():
             print("Error when homing stage")
             sys.exit(-1)
 
-        # TODO: have an updating estimation for remaining time
-        #test_length = (starting_angle - ending_angle) / step_size * averaging_time / 60
-        #print(f"Test will take {test_length} minutes to complete.")
+    # TODO: have an updating estimation for remaining time
+    #test_length = (starting_angle - ending_angle) / step_size * averaging_time / 60
+    #print(f"Test will take {test_length} minutes to complete.")
 
     input("Press any key to begin")
 
-    # Reset averaging
+    # Write test info to file
+    with open(f"{destination_filename}.info", 'w') as file:
+        file.write(f"Description: {settings.desc}")
+        file.write(f"Mode: {mode}")
+        file.write(f"Rotation span: {starting_angle} - {ending_angle} degrees")
+        file.write(f"Step size: {step_size} degrees")
+        if mode == "cw":
+            file.write(f"Averaging time: {averaging_time} seconds")
+        if mode == "ber":
+            file.write(f"# waveforms per position: {waveform_count}")
+            file.write(f"Waveform IF estimate: {if_estimate}")
+            file.write(f"Original waveform filename: {waveform_proc.original_waveform}")
+
+
+    # Begin Test
     scope.do_command(":CDISplay")
     try:
-        if not processor_debug:
+        if not ignore_rotator:
             plot = Custom_Plot(settings.desc, mode, save_dir, destination_filename)
             current_pos = stage.get_rel_angle()
             data = [[], []]
@@ -108,7 +124,10 @@ def main():
                 print(f"Stage position: {current_pos} (absolute) {current_pos - zero_offset} (effective)")
 
                 if mode == "cw":
-                    datapoint = measure_amplitude(scope, averaging_time)
+                    datapoint = measure_amplitude(scope, averaging_time, save_wf=save_waveforms)
+                    if save_waveforms:
+                        datapoint, waveform, samp_rate = datapoint
+                        save_waveform(waveform, samp_rate, 1, current_pos)
                 elif mode == "ber":
                     datapoint = 0
                     n = waveform_count
@@ -146,13 +165,16 @@ def main():
 
             plot.print_report()
 
-        else:  # if processor_debug mode
+        else:  # if ignore_rotator mode
             if mode == "cw":
-                measure_amplitude(scope, averaging_time, dump=True)
+                data = measure_amplitude(scope, averaging_time, save_wf=save_waveforms)
+                if save_waveforms:
+                    data, waveform, samp_rate = data
+                    save_waveform(waveform, samp_rate, 1, current_pos=None)
+                
             elif mode == "ber":
                 datapoint = 0
                 n = waveform_count
-                current_pos = 0
                 while True:
                     (ber, waveform, samp_rate) = measure_ber(scope, waveform_proc)
 
@@ -161,13 +183,12 @@ def main():
                         break
                     else:
                         datapoint += ber
-                        save_waveform(waveform, samp_rate, n, current_pos)
+                        save_waveform(waveform, samp_rate, n, current_pos=None)
                         n -= 1
                         if n == 0:
                             datapoint = datapoint / waveform_count
                             break
-
-        input("Press any key to exit")
+                print(f"Average BER: {datapoint}")
 
     except KeyboardInterrupt:
         pass
@@ -178,7 +199,7 @@ def main():
 ###############################################################################
 
 
-def measure_amplitude(scope, averaging_time, dump=False):
+def measure_amplitude(scope, averaging_time, save_wf=False):
     # Reset averaging
     scope.do_command(":CDISplay")
     time.sleep(averaging_time)
@@ -186,28 +207,26 @@ def measure_amplitude(scope, averaging_time, dump=False):
     # TODO: make sure peak is at correct frequency
     print(f"Power level: {datapoint} dBm")
 
-    if dump:
+    if save_wf:
         waveform = scope.get_waveform_words()
         samp_rate = scope.get_sample_rate()
-        dump_waveform(waveform, samp_rate)
+        return (datapoint, waveform, samp_rate)
 
     return datapoint
 
 
-def measure_ber(scope, waveform_proc, dump=False):
+def measure_ber(scope, waveform_proc):
     waveform = scope.get_waveform_words()
     samp_rate = float(scope.get_sample_rate())
     if debug:
         print(f"Captured sample rate: '{samp_rate}'")
-
-    if dump:
-        dump_waveform(waveform, samp_rate, waveform_proc.original_waveform)
 
     ber = waveform_proc.process_qam(samp_rate, waveform)
 
     return (ber, waveform, samp_rate)
 
 
+## Deprecated
 def dump_waveform(waveform, samp_rate, source_waveform=None):
     plt.figure(1)
     plt.plot(waveform[:500])
@@ -230,11 +249,13 @@ def dump_waveform(waveform, samp_rate, source_waveform=None):
 def save_waveform(waveform, samp_rate, n, position):
     data = array('i', waveform)
 
+    if not position:
+        position = ""
+
     datafile = os.path.join(waveform_dir, f"{position}_{n}")
 
     with open(datafile, 'wb') as outp:
         data.tofile(outp)
-
 
 
 

@@ -21,12 +21,15 @@ class UserSettings:
         self.step_size = Setting("step size", description="how many degrees between each sample point")
         self.zero_offset = Setting("zero offset", default_value="0", description="stage position that results in 0 degree actual angle for DUT.\n" +
                                    "!!! Leave at 0 unless you know what you're doing !!!")
+        
+        # Save waveforms
+        self.save_waveforms = Setting("save waveforms", description="should every waveform capture be saved to a file for further analysis", valid_values=['t', 'f', 'y', 'n', '1', '0'], bool=True)
+        self.waveform_count = Setting("waveform count", description="how many waveforms should be captured at each position (ignored if save waveforms is false)")
+
         # Single tone
         self.averaging_time = Setting("averaging time", description="how many seconds to wait for DSO to average before recording value")
 
         # Modulated
-        self.save_waveforms = Setting("save waveforms", description="should every waveform capture be saved to a file for further analysis", valid_values=['t', 'f', 'y', 'n', '1', '0'], bool=True)
-        self.waveform_count = Setting("waveform count", description="how many waveforms should be captured at each position (ignored if save waveforms is false)")
         self.if_estimate = Setting("if estimate", description="todo")
 
 
@@ -41,6 +44,11 @@ class UserSettings:
             "ending_pos": self.ending_pos,
             "step_size": self.step_size,
             "zero_offset": self.zero_offset,
+            "save_waveforms": self.save_waveforms,
+        }
+
+        swf_settings = {
+            "waveform_count": self.waveform_count,
         }
 
         cw_settings = {
@@ -48,8 +56,6 @@ class UserSettings:
         }
 
         mt_settings = {
-            "save_waveforms": self.save_waveforms,
-            "waveform_count": self.waveform_count,
             "if_estimate": self.if_estimate,
         }
 
@@ -66,6 +72,10 @@ class UserSettings:
         elif mode.value == "ber":
             self.load(mt_settings)
             settings = gen_settings | mt_settings
+
+        if mode.value == "ber" and self.save_waveforms.value:
+            self.load(swf_settings)
+            settings = settings | swf_settings
             
 
 
