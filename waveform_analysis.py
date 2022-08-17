@@ -157,7 +157,7 @@ if __name__ == '__main__':
         plt.plot(short)
         plt.title("captured waveform")
 
-    #proc.process_qam(samp_rate, waveform)
+    proc.process_qam(samp_rate, waveform)
     input()
 
 #import pickle
