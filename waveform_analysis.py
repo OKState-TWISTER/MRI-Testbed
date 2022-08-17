@@ -130,27 +130,34 @@ class WaveformProcessor:
 
 
 if __name__ == '__main__':
+    from array import array
     import matplotlib.pyplot as plt
-    import pickle
+    
+    samp_rate = int(8e9)
 
-    captured_waveform_filename = "warmup-01082022_112216_waveform.pkl"  # this is the python object file (.pkl)
+    # this is where waveform files are located
+    waveform_dir = r"V:\MRI-Testbed\Data\mendis_data\test1_16082022_162131_waveforms"
 
-    with open(captured_waveform_filename, 'rb') as inp:
-        waveform = pickle.load(inp)
-        samp_rate = pickle.load(inp)
-        try:
-            original_waveform_filename = pickle.load(inp)
-        except EOFError:
-            print(f"Original waveform filename not found in {captured_waveform_filename}")
-            original_waveform_filename = None
+    proc = WaveformProcessor(True)
 
-    proc = WaveformProcessor(True, original_waveform_filename)
+    for filename in os.listdir(waveform_dir):
+        data = array('i')
+        filepath = os.path.join(waveform_dir, filename)
 
-    plt.figure(1)
-    plt.plot(waveform)
-    plt.title("capturer waveform")
+        with open(filepath, 'rb') as file:
+            try:
+                data.fromfile(file, 321000)
+            except EOFError:
+                print("")
 
-    proc.process_qam(samp_rate, waveform)
+        datalist = data.tolist()
+        short = datalist[:500]
+
+        plt.figure(1)
+        plt.plot(short)
+        plt.title("captured waveform")
+
+    #proc.process_qam(samp_rate, waveform)
     input()
 
 #import pickle

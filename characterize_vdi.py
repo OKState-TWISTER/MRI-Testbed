@@ -247,6 +247,8 @@ def dump_waveform(waveform, samp_rate, source_waveform=None):
 
 
 def save_waveform(waveform, samp_rate, n, position):
+    # TODO: save sample rate to file (filename?)
+
     data = array('i', waveform)
 
     if not position:
