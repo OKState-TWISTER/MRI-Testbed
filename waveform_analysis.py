@@ -45,6 +45,9 @@ class WaveformProcessor:
         while filepath is None:
             print()
             files = [file for file in os.listdir() if file.endswith(".mat")]
+            if not files:
+                print("Error: No valid source (.mat) files found. Exiting.")
+                sys.exit(-1)
             for idx, filename in enumerate(files):
                 print(f"{idx}: {filename}")
 
@@ -131,11 +134,11 @@ class WaveformProcessor:
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
-    from io import File_IO
+    from fileio import File_IO
 
     # this is where waveform files are located
-    waveform_dir = r"C:\Users\UTOL\Desktop\MRI-Testbed\Data\mendis_data_2\test1_2022-08-17T1424_waveforms"
-    if_estimate = 5e9
+    waveform_dir = r"C:\Users\UTOL\Desktop\MRI-Testbed\Data\mendis_data_variable_span\bpsk_75mm_2022-08-18T1527_waveforms"
+    if_estimate = 7e9
 
     fileio = File_IO(waveform_dir)
 
@@ -151,6 +154,8 @@ if __name__ == '__main__':
         plt.title("captured waveform (first 500 samples)")
 
         proc.process_qam(samp_rate, samples)
+
+        break
 
     input()
 

@@ -21,7 +21,7 @@ import time
 import matplotlib.pyplot as plt
 import pickle
 
-from io import File_IO
+from fileio import File_IO
 from plot import Custom_Plot
 from stage_control import Kinesis
 from scope_control import Infiniium
@@ -138,7 +138,7 @@ def main():
                             break
                         else:
                             datapoint += ber
-                            fileio.save_waveform(waveform, samp_rate, current_pos, 1)
+                            fileio.save_waveform(waveform, samp_rate, current_pos, n)
                             n -= 1
                             if n == 0:
                                 datapoint = datapoint / waveform_count
@@ -174,15 +174,17 @@ def main():
             elif mode == "ber":
                 datapoint = 0
                 n = waveform_count
+                first = True
                 while True:
-                    (ber, waveform, samp_rate) = measure_ber(scope, waveform_proc)
+                    (ber, waveform, samp_rate) = measure_ber(scope, waveform_proc, first)
+                    first = False
 
                     if not save_waveforms:
                         datapoint = ber
                         break
                     else:
                         datapoint += ber
-                        fileio.save_waveform(waveform, samp_rate, None, 1)
+                        fileio.save_waveform(waveform, samp_rate, None, n)
                         n -= 1
                         if n == 0:
                             datapoint = datapoint / waveform_count
@@ -214,13 +216,16 @@ def measure_amplitude(scope, averaging_time, save_wf=False):
     return datapoint
 
 
-def measure_ber(scope, waveform_proc):
+def measure_ber(scope, waveform_proc, analyze):
     waveform = scope.get_waveform_words()
     samp_rate = float(scope.get_sample_rate())
     if debug:
         print(f"Captured sample rate: '{samp_rate}'")
 
-    ber = waveform_proc.process_qam(samp_rate, waveform)
+    if analyze:
+        ber = waveform_proc.process_qam(samp_rate, waveform)
+    else:
+        ber = 0
 
     return (ber, waveform, samp_rate)
 

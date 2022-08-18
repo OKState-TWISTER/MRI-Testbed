@@ -25,6 +25,7 @@ time_full = (tmin:(1/sample_rate):(tmax))';
 
 % Calculate samples per symbol, and force it do be an integer.
 % (An integer SPS is required by communication toolbox system objects)
+fprintf("SPS is %.8f\n.", sample_rate/symbol_rate)
 sps = floor(sample_rate/symbol_rate);
 sample_rate = sps*symbol_rate;
 
@@ -258,7 +259,7 @@ shift_ideal = 0;
 % rotation combination that yields the minimum number of errors.
 for n = 0:3
     % Set phase offset (rotation) angle
-    phi_0 = n*pi/2;
+    phi_0 = n*pi/2 + pi/4;
     
     % Demodulate the sampled symbols.
     symbols = qamdemod(exp(1j*phi_0)*samples, M);
