@@ -21,6 +21,7 @@ import time
 import matplotlib.pyplot as plt
 import pickle
 
+from io import File_IO
 from plot import Custom_Plot
 from stage_control import Kinesis
 from scope_control import Infiniium
@@ -58,7 +59,7 @@ def main():
         averaging_time = float(settings.averaging_time())
     if mode == "ber":
         if_estimate = float(settings.if_estimate())
-        if save_waveform:
+        if save_waveforms:
             waveform_count = int(settings.waveform_count())
 
     # Create save destination
@@ -69,12 +70,9 @@ def main():
     global destination_filename
     destination_filename = f"{settings.desc}_{date_time}"
 
-    if save_waveform:
-        global waveform_dir
+    if save_waveforms:
         waveform_dir = os.path.join(save_dir, destination_filename + "_waveforms")
-        if not os.path.exists(waveform_dir):
-            os.makedirs(waveform_dir)
-
+        fileio = File_IO(waveform_dir)
 
     # Initialize DSO (scope_control.py)
     scope = Infiniium(visa_address, debug)
@@ -128,7 +126,7 @@ def main():
                     datapoint = measure_amplitude(scope, averaging_time, save_wf=save_waveforms)
                     if save_waveforms:
                         datapoint, waveform, samp_rate = datapoint
-                        save_waveform(waveform, samp_rate, 1, current_pos)
+                        fileio.save_waveform(waveform, samp_rate, current_pos, 1)
                 elif mode == "ber":
                     datapoint = 0
                     n = waveform_count
@@ -140,7 +138,7 @@ def main():
                             break
                         else:
                             datapoint += ber
-                            save_waveform(waveform, samp_rate, n, current_pos)
+                            fileio.save_waveform(waveform, samp_rate, current_pos, 1)
                             n -= 1
                             if n == 0:
                                 datapoint = datapoint / waveform_count
@@ -171,7 +169,7 @@ def main():
                 data = measure_amplitude(scope, averaging_time, save_wf=save_waveforms)
                 if save_waveforms:
                     data, waveform, samp_rate = data
-                    save_waveform(waveform, samp_rate, 1, position=None)
+                    fileio.save_waveform(waveform, samp_rate, None, 1)
                 
             elif mode == "ber":
                 datapoint = 0
@@ -184,7 +182,7 @@ def main():
                         break
                     else:
                         datapoint += ber
-                        save_waveform(waveform, samp_rate, n, position=None)
+                        fileio.save_waveform(waveform, samp_rate, None, 1)
                         n -= 1
                         if n == 0:
                             datapoint = datapoint / waveform_count
@@ -225,58 +223,6 @@ def measure_ber(scope, waveform_proc):
     ber = waveform_proc.process_qam(samp_rate, waveform)
 
     return (ber, waveform, samp_rate)
-
-
-## Deprecated
-def dump_waveform(waveform, samp_rate, source_waveform=None):
-    plt.figure(1)
-    plt.plot(waveform[:500])
-    plt.title("Waveform dump (first 500 samples)")
-    # plot.show()  # TODO: change number of samples to show to a useful ammount (based on samplerate)
-    # TODO: dont halt program on waveform plot
-
-    appendix = "_waveform_sn.pkl" if source_waveform else "_waveform.pkl"
-
-    datafile = os.path.join(save_dir, destination_filename + appendix)
-
-    print(f"\nSaving {len(waveform)} samples at rate {samp_rate} smp/s to {datafile}\n")
-    with open(datafile, 'wb') as outp:
-        pickle.dump(waveform, outp, pickle.HIGHEST_PROTOCOL)
-        pickle.dump(samp_rate, outp, pickle.HIGHEST_PROTOCOL)
-        if source_waveform:
-            pickle.dump(source_waveform, outp, pickle.HIGHEST_PROTOCOL)
-
-
-
-def save_waveform(waveform, samp_rate, n, position):
-    if not position:
-        position = "static"
-
-    datafile = os.path.join(waveform_dir, f"{position}_{n}.pkl")
-
-    num_samples = len(waveform)
-
-    print(f"Saving {num_samples} at {samp_rate} Samp/sec to file '{datafile}'")
-
-    with open(datafile, 'wb') as outp:
-        pickle.dump(samp_rate, outp, pickle.HIGHEST_PROTOCOL)
-        pickle.dump(num_samples, outp, pickle.HIGHEST_PROTOCOL)
-        pickle.dump(waveform, outp, pickle.HIGHEST_PROTOCOL)
-
-'''
-def save_waveform(waveform, samp_rate, n, position):
-    # TODO: save sample rate to file (filename?)
-
-    data = array('i', waveform)
-
-    if not position:
-        position = ""
-
-    datafile = os.path.join(waveform_dir, f"{position}_{n}")
-
-    with open(datafile, 'wb') as outp:
-        data.tofile(outp)
-'''
 
 
 if __name__ == '__main__':

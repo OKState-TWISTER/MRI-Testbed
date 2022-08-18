@@ -1,7 +1,3 @@
-# TODO:
-# plot ber better
-# change the values on the r axis to report real dBm values for cw tests
-
 import matplotlib.pyplot as plt
 import numpy
 import os

@@ -4,8 +4,8 @@ import os
 
 
 class File_IO:
-    def __init__(self, save_dir, dest_filename):
-        self.waveform_dir = os.path.join(save_dir, dest_filename + "_waveforms")
+    def __init__(self, waveform_dir):
+        self.waveform_dir = waveform_dir
 
 
     def save_waveform(self, waveform, samp_rate, position, n):
@@ -77,7 +77,7 @@ class File_IO:
         if len(data) != samp_count:
             print("Warning: loading file error.\nPayload length does not match sample count. Data may be corrupted")
 
-        return (samp_rate, samples)
+        return (samp_rate, samp_count, samples)
 
 
 if __name__ == '__main__':
