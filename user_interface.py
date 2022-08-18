@@ -73,7 +73,7 @@ class UserSettings:
             self.load(mt_settings)
             settings = gen_settings | mt_settings
 
-        if mode.value == "ber" and self.save_waveforms.value:
+        if mode.value == "ber" and self.save_waveforms.value == "true":
             self.load(swf_settings)
             settings = settings | swf_settings
             

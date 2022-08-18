@@ -8,6 +8,7 @@ function [data, nsym, errors, SNR] = processQAM(mod_order, block_length, sym_rat
 M = mod_order; % Equal to the number of QAM symbols.
 %block_length = block_length; % number of symbols per marker frame.
 symbol_rate = sym_rate; % symbol rate
+%symbol_rate = sym_rate*(63.90039/64);
 
 signal = captured_samples;
 sample_rate = samp_rate; % Oscilloscope sample rate.
@@ -39,12 +40,16 @@ signal = signal - mean(signal);
 % Apply a uniform gain so signal peak is unity
 signal = signal/max(abs(signal));
 
+fprintf("Length of time_full: %.0f.  Length of signal: %.0f.  Length of time: %.0f\n", length(time_full), length(signal), length(time))
+
 % Diagnostics
+%{
 if diagnostics_on
     figure(1); clf; hold on;
     title("Normalized Signal")
     plot(time_full, signal);
 end
+%}
 
 %% MIX WITH THE LOCAL OSCILLATOR
 % Mix the signal
@@ -77,10 +82,12 @@ if diagnostics_on
     plot(2*signal, '.', 'MarkerSize', 4);
     
     % Power amplification level
+    %{
     figure(1); clf;
     title("Power amplification level")
     plot(time, powerLevel);
     xlabel("Time (s)"); ylabel("Power (units?)");
+    %}
 end
 
 %% RAISED COSINE FILTERING 

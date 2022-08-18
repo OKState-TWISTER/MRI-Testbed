@@ -132,32 +132,27 @@ class WaveformProcessor:
 if __name__ == '__main__':
     from array import array
     import matplotlib.pyplot as plt
-    
-    samp_rate = int(8e9)
+    import pickle
 
     # this is where waveform files are located
-    waveform_dir = r"V:\MRI-Testbed\Data\mendis_data\test1_16082022_162131_waveforms"
+    waveform_dir = r"C:\Users\UTOL\Desktop\MRI-Testbed\Data\mendis_data_2\test1_2022-08-17T1424_waveforms"
+    if_estimate = 5e9
 
-    proc = WaveformProcessor(True)
+    proc = WaveformProcessor(if_estimate=if_estimate, debug=True)
 
     for filename in os.listdir(waveform_dir):
-        data = array('i')
-        filepath = os.path.join(waveform_dir, filename)
-
-        with open(filepath, 'rb') as file:
-            try:
-                data.fromfile(file, 321000)
-            except EOFError:
-                print("")
-
-        datalist = data.tolist()
-        short = datalist[:500]
+        path = os.path.join(waveform_dir, filename)
+        with open(path, 'rb') as inp:
+            samp_rate = pickle.load(inp)
+            num_samples = pickle.load(inp)
+            waveform = pickle.load(inp)
 
         plt.figure(1)
-        plt.plot(short)
-        plt.title("captured waveform")
+        plt.plot(waveform[:500])
+        plt.title("captured waveform (first 500 samples)")
 
-    proc.process_qam(samp_rate, waveform)
+        proc.process_qam(samp_rate, waveform)
+    
     input()
 
 #import pickle

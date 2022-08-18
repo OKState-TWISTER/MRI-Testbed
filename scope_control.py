@@ -49,7 +49,12 @@ class Infiniium:
 
     def get_sample_rate(self):
         xinc = self.do_query(":WAVeform:XINCrement?")
-        return 1 / float(xinc)
+        samp_rate = 1 / float(xinc)
+
+        if self.debug:
+            print(f"Xinc: '{xinc}'\nSample rate: '{samp_rate}'")
+
+        return samp_rate
 
     def get_waveform_bytes(self):
         # Get the number of waveform points.

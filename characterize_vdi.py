@@ -1,4 +1,4 @@
-# v2.7b1
+# v2.7c
 
 """
 This program serves to automatically profile VDI modules by controlling various components:
@@ -32,12 +32,12 @@ from waveform_analysis import WaveformProcessor
 serial_num = "40163084"  # Serial number for rotation stage
 visa_address = "USB0::0x2A8D::0x9027::MY59190106::0::INSTR"  # VISA address for DSO
 
-date_time = datetime.datetime.now().isoformat(timespec="minutes")
+date_time = datetime.datetime.now().strftime("%Y-%m-%dT%H%M%z")
 output_dir = "Data"
 
 # Various mode controls
-debug = False  # prints a whole lot of debug info
-ignore_rotator = False  # performs a single shot measurement (ignores rotation stage), dumps waveform to file
+debug = True  # prints a whole lot of debug info
+ignore_rotator = True  # performs a single shot measurement (ignores rotation stage), dumps waveform to file
 
 
 def main():
@@ -99,17 +99,18 @@ def main():
     input("Press any key to begin")
 
     # Write test info to file
-    with open(f"{destination_filename}.info", 'w') as file:
-        file.write(f"Description: {settings.desc}")
-        file.write(f"Mode: {mode}")
-        file.write(f"Rotation span: {starting_angle} - {ending_angle} degrees")
-        file.write(f"Step size: {step_size} degrees")
+    info_fp = os.path.join(save_dir, f"{destination_filename}.info")
+    with open(info_fp, 'w') as file:
+        file.write(f"Description: {settings.desc}\n")
+        file.write(f"Mode: {mode}\n")
+        file.write(f"Rotation span: {starting_angle} - {ending_angle} degrees\n")
+        file.write(f"Step size: {step_size} degrees\n")
         if mode == "cw":
-            file.write(f"Averaging time: {averaging_time} seconds")
+            file.write(f"Averaging time: {averaging_time} seconds\n")
         if mode == "ber":
-            file.write(f"# waveforms per position: {waveform_count}")
-            file.write(f"Waveform IF estimate: {if_estimate}")
-            file.write(f"Original waveform filename: {waveform_proc.original_waveform}")
+            file.write(f"# waveforms per position: {waveform_count}\n")
+            file.write(f"Waveform IF estimate: {if_estimate}\n")
+            file.write(f"Original waveform filename: {waveform_proc.original_waveform}\n")
 
 
     # Begin Test
@@ -170,7 +171,7 @@ def main():
                 data = measure_amplitude(scope, averaging_time, save_wf=save_waveforms)
                 if save_waveforms:
                     data, waveform, samp_rate = data
-                    save_waveform(waveform, samp_rate, 1, current_pos=None)
+                    save_waveform(waveform, samp_rate, 1, position=None)
                 
             elif mode == "ber":
                 datapoint = 0
@@ -183,7 +184,7 @@ def main():
                         break
                     else:
                         datapoint += ber
-                        save_waveform(waveform, samp_rate, n, current_pos=None)
+                        save_waveform(waveform, samp_rate, n, position=None)
                         n -= 1
                         if n == 0:
                             datapoint = datapoint / waveform_count
@@ -193,7 +194,7 @@ def main():
     except KeyboardInterrupt:
         pass
 
-    print("Test complete.")
+    input("Test complete.")
 
 
 ###############################################################################
@@ -246,6 +247,23 @@ def dump_waveform(waveform, samp_rate, source_waveform=None):
             pickle.dump(source_waveform, outp, pickle.HIGHEST_PROTOCOL)
 
 
+
+def save_waveform(waveform, samp_rate, n, position):
+    if not position:
+        position = "static"
+
+    datafile = os.path.join(waveform_dir, f"{position}_{n}.pkl")
+
+    num_samples = len(waveform)
+
+    print(f"Saving {num_samples} at {samp_rate} Samp/sec to file '{datafile}'")
+
+    with open(datafile, 'wb') as outp:
+        pickle.dump(samp_rate, outp, pickle.HIGHEST_PROTOCOL)
+        pickle.dump(num_samples, outp, pickle.HIGHEST_PROTOCOL)
+        pickle.dump(waveform, outp, pickle.HIGHEST_PROTOCOL)
+
+'''
 def save_waveform(waveform, samp_rate, n, position):
     # TODO: save sample rate to file (filename?)
 
@@ -258,7 +276,7 @@ def save_waveform(waveform, samp_rate, n, position):
 
     with open(datafile, 'wb') as outp:
         data.tofile(outp)
-
+'''
 
 
 if __name__ == '__main__':
