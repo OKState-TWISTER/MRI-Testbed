@@ -2,15 +2,13 @@ from array import array
 import pickle
 import os
 
-data_dir = r"Data"
+data_dir = r""
 
 for root, d_names, f_names in os.walk(data_dir):
     for file in f_names:
         filepath = os.path.join(root, file)
 
         if not filepath.endswith(".pkl"):
-            continue
-        if os.path.exists(filepath.replace(".pkl", "")):
             continue
 
         with open(filepath, 'rb') as inp:
@@ -35,3 +33,5 @@ for root, d_names, f_names in os.walk(data_dir):
             outp.write(sample_rate)
             outp.write(num_samples)
             outp.write(data)
+
+        os.remove(filepath)
