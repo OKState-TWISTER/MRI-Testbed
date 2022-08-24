@@ -17,6 +17,13 @@ f_LO = IF_estimate;
 original_sample_frame = original_samples;
 original_symbol_frame = qamdemod(original_sample_frame, M);
 
+modtype = sprintf("%i-QAM", M);
+if M == 2
+    modtype = "BPSK";
+elseif M == 4
+    modtype = "QPSK";
+end
+
 %% EXTRACT, SCALE, AND INTERPOLATE THE WAVEFORM
 % Create the time vector
 tmin = 0;
@@ -25,15 +32,15 @@ time_full = (tmin:(1/sample_rate):(tmax))';
 
 % Calculate samples per symbol, and force it do be an integer.
 % (An integer SPS is required by communication toolbox system objects)
-fprintf("SPS is %.8f\n.", sample_rate/symbol_rate)
-sps = floor(sample_rate/symbol_rate);
+sps = 8; %2*floor(sample_rate/(2*symbol_rate)); % sps should be even.  I don't know why.
+fprintf("Original SPS is %.2f, New is %i.\n", sample_rate/symbol_rate, sps)
 sample_rate = sps*symbol_rate;
 
 % Create downsampled time (query) vector
 time = (0:(1/sample_rate):tmax)';
 
 % Downsample by interpolation
-signal = interp1(time_full, signal, time);
+signal = interp1(time_full, signal, time, 'makima');
 
 % Make the time-domain waveform zero-mean
 signal = signal - mean(signal);
@@ -41,16 +48,6 @@ signal = signal - mean(signal);
 % Apply a uniform gain so signal peak is unity
 signal = signal/max(abs(signal));
 
-fprintf("Length of time_full: %.0f.  Length of signal: %.0f.  Length of time: %.0f\n", length(time_full), length(signal), length(time))
-
-% Diagnostics
-%{
-if diagnostics_on
-    figure(1); clf; hold on;
-    title("Normalized Signal")
-    plot(time_full, signal);
-end
-%}
 
 %% MIX WITH THE LOCAL OSCILLATOR
 % Mix the signal
@@ -75,12 +72,12 @@ automaticGainControl = comm.AGC;
 
 % Diagnostics
 if diagnostics_on
-    fprintf('AGC\n');
+    %fprintf('AGC\n');
     
     % Main plot
     figure(100);
     title("AGC")
-    plot(2*signal, '.', 'MarkerSize', 4);
+    plot(signal, '.', 'MarkerSize', 4);
     
     % Power amplification level
     %{
@@ -96,7 +93,7 @@ end
 rxfilter = comm.RaisedCosineReceiveFilter;
     rxfilter.Shape = 'Square root';
     rxfilter.RolloffFactor = rcf_rolloff;
-    rxfilter.FilterSpanInSymbols = 10;
+    rxfilter.FilterSpanInSymbols = 12;
     rxfilter.InputSamplesPerSymbol = sps;
     rxfilter.DecimationFactor = 1;
     rxfilter.DecimationOffset = 0;
@@ -105,7 +102,7 @@ rxfilter = comm.RaisedCosineReceiveFilter;
 signal = rxfilter(signal);
 
 if diagnostics_on
-    fprintf('RCF\n');
+    %fprintf('RCF\n');
     
     % Main plot
     figure(100);
@@ -126,13 +123,14 @@ coarseFrequencyComp = comm.CoarseFrequencyCompensator;
     %coarseFrequencyComp.SamplesPerSymbol = sps; % Hz, for OQPSK only
 
 [signal, errorFreqOffset] = coarseFrequencyComp(signal);
+upsampled = signal;
 
 % From here on, we're working with a samples of the waveform.
 % Create a timing vector for symbol time.
 time_samples_full = 0:(1/symbol_rate):((length(signal)-1)*(1/symbol_rate));
 
 if diagnostics_on
-    fprintf('Freq. Comp.\n');
+    %fprintf('Freq. Comp.\n');
     
     % Main plot
     figure(100);
@@ -144,17 +142,18 @@ end
 % (Symbol Synchronization)
 symbolSync = comm.SymbolSynchronizer;
     symbolSync.Modulation = 'PAM/PSK/QAM';
-    symbolSync.TimingErrorDetector = 'Gardner (non-data-aided)';
+    symbolSync.TimingErrorDetector = 'Zero-Crossing (decision-directed)';
     symbolSync.SamplesPerSymbol = sps;
-    symbolSync.DampingFactor = 1;
-    symbolSync.NormalizedLoopBandwidth = 0.005;
+    symbolSync.DampingFactor = 10;
+    symbolSync.NormalizedLoopBandwidth = 0.001;
     symbolSync.DetectorGain = 1;
 
+    
 %signal(isnan(signal)) = 0;
 [signal, timing_error] = symbolSync(signal);
 
 if diagnostics_on
-    fprintf('Symbol Sync (timing recovery)\n');
+    %fprintf('Symbol Sync (timing recovery)\n');
     
     % Main plot
     figure(100);
@@ -179,19 +178,63 @@ carrSync = comm.CarrierSynchronizer;
     carrSync.Modulation = 'QAM';
     carrSync.ModulationPhaseOffset = 'Auto';
     %carrSync.CustomPhaseOffset = 0;
-    carrSync.SamplesPerSymbol = 1; %fs/(baud)
+    carrSync.SamplesPerSymbol = 1;
     carrSync.DampingFactor = 1;
-    carrSync.NormalizedLoopBandwidth = 0.01; % 0.01
+    carrSync.NormalizedLoopBandwidth = 0.001; % 0.01
 
+
+carrSync_eye = comm.CarrierSynchronizer;
+    carrSync_eye.Modulation = carrSync.Modulation;
+    carrSync_eye.ModulationPhaseOffset = 'Auto';
+    %carrSync_eye.CustomPhaseOffset = 0;
+    carrSync_eye.SamplesPerSymbol = sps; %fs/(baud)
+    carrSync_eye.DampingFactor = 1;
+    carrSync_eye.NormalizedLoopBandwidth = 0.01; % 0.01
+
+    
 [signal, error_phase] = carrSync(signal);
+[signal_eye, ~] = carrSync_eye(upsampled);
+
+signal_eye = circshift(signal_eye, 0);
+
+%fprintf("%i\n", round(timing_error(1)*sample_rate))
+
+%{
+nsym = 1;
+SNR = 10;
+
+errors = struct;
+errors.bit = 10;
+errors.sym = 10;
+
+data = struct;
+data.symbols = 100;
+data.samples = 100;
+return
+%}
+
+k = 4; %4*block_length;
+signal_eye = signal_eye((1+symbols_to_drop*sps):end);
+eye_traces = reshape(signal_eye(1:(end-mod(length(signal_eye), k*sps))), k*sps, []);
+eye_traces = eye_traces(:, (1:1:600))./sqrt(2);
 
 if diagnostics_on
-    fprintf('Carrier Sync.\n');
+    %fprintf('Carrier Sync.\n');
     
     % Main plot
+    
+    figure(100);
+        plot(signal_eye, '.', 'MarkerSize', 1);
+        
     figure(100);
         title("Carrier Sync")
         plot(signal, '.', 'MarkerSize', 1);
+        
+    figure(101);
+        plot(time(1:(k*sps))*1e9, real(eye_traces*exp(1j*pi/4)), '-', 'Color', [1, 1, 1, 0.1]);
+        title(sprintf("%.1f Gbd %s Eye Diagram", symbol_rate/1e9, modtype));
+        xlabel("Time (ns)");
+        ylabel("Arbitrary Units");
         
     % Phase error
     figure(3); clf;
@@ -223,7 +266,6 @@ original_symbols = repmat(original_symbol_frame, n_frames, 1);
 original_samples = repmat(original_sample_frame, n_frames, 1);
 
 % Create symbol time vector (subset of the full-length symbol-time vector)
-fprintf("%.0f, %.0f, %.0f\n", block_length, n_frames, block_length*n_frames);
 time_samples = time_samples_full(1:(block_length*n_frames));
 
 % Now, trim the sample vector to be exactly an integer multiple of the 
@@ -247,11 +289,14 @@ samples = samples_full((end-block_length*n_frames+1):end);
 % The first thing to do is to align the measured and original symbols
 
 % Set up for the shift-determination loop
-header = original_symbols(1:16 ); % Look for this pattern in the RX data.
+header = original_symbols(1:32); % Look for this pattern in the RX data.
 shifts = 1:(length(original_symbols)-length(header));
 n_errors_min = numel(samples);
 phi_0_ideal = 0;
 shift_ideal = 0;
+
+%fprintf("%i, %i, %i\n", length(original_symbols), length(shifts), length(samples));
+% 349280, 349264, 349280
 
 % Now, try to determine the shift between the original and measured data.
 % We will do this four times (one for each of the four N*pi/2 radian
@@ -275,7 +320,7 @@ for n = 0:3
 
     % Diagnostic: see how the symbols compare. Helps debug rotation and
     % decoding problems.
-    
+    %{
     check = 300:330;
     fprintf("\n Decoded: ");
     fprintf("%.0f, ", symbols(check));
@@ -286,7 +331,7 @@ for n = 0:3
 
     % Now get the SER.
     %symbols = reshape(symbols, block_length, n_frames);
-    n_errors = sum(original_symbols ~= symbols)
+    n_errors = sum(original_symbols ~= symbols);
     
     if n_errors < n_errors_min
         n_errors_min = n_errors;
@@ -339,10 +384,10 @@ if diagnostics_on
     
     % Mark sample times on time-domain waveform
     figure(6); clf; hold on;
-    plot(time_samples, real(samples), 'x');
     plot(time_samples, imag(samples), 'x');
+    plot(time_samples, real(samples), 'x');
     title("Samples in Time Domain");
-    legend("I channel", "Q channel");
+    legend("Q channel", "I channel");
 end
 
 
