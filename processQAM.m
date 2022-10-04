@@ -1,4 +1,4 @@
-function [data, nsym, errors, SNR] = processQAM(mod_order, block_length, sym_rate, IF_estimate, symbols_to_drop, rcf_rolloff, original_samples, samp_rate, captured_samples, diagnostics_on)
+function [data, nsym, errors, SNR] = processQAM(mod_order, block_length, sym_rate, IF_estimate, symbols_to_drop, rcf_rolloff, original_samples, samp_rate, captured_samples, debug, diagnostics_on)
 % processQAM decodes the QAM waveform contained in the structure waveform.
 % waveform contains all previously-loaded data and settings.
 
@@ -33,7 +33,9 @@ time_full = (tmin:(1/sample_rate):(tmax))';
 % Calculate samples per symbol, and force it do be an integer.
 % (An integer SPS is required by communication toolbox system objects)
 sps = 8; %2*floor(sample_rate/(2*symbol_rate)); % sps should be even.  I don't know why.
-fprintf("Original SPS is %.2f, New is %i.\n", sample_rate/symbol_rate, sps)
+if debug
+    fprintf("Original SPS is %.2f, New is %i.\n", sample_rate/symbol_rate, sps)
+end
 sample_rate = sps*symbol_rate;
 
 % Create downsampled time (query) vector
@@ -110,6 +112,8 @@ if diagnostics_on
     plot(signal, '.', 'MarkerSize', 3);
 end
 
+
+warning('off','comm:CoarseFrequencyCompensator:NeedTooMuchMemory');
 %% COARSE FREQUENCY COMPENSATION
 % Corrects Clock Skew
 coarseFrequencyComp = comm.CoarseFrequencyCompensator;
@@ -124,6 +128,7 @@ coarseFrequencyComp = comm.CoarseFrequencyCompensator;
 
 [signal, errorFreqOffset] = coarseFrequencyComp(signal);
 upsampled = signal;
+
 
 % From here on, we're working with a samples of the waveform.
 % Create a timing vector for symbol time.

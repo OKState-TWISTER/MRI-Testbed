@@ -12,7 +12,7 @@ import math
 from multiprocessing.sharedctypes import Value
 import os
 import sys
-from time import time
+from time import perf_counter as time
 
 import matlab.engine
 
@@ -22,6 +22,7 @@ import matlab.engine
 class WaveformProcessor:
     def __init__(self, if_estimate=None, debug=False, org_waveform=None):
         self.debug = debug
+        self.diagnostics = False
 
         print("Initializing MATLAB engine")
         start = time()
@@ -47,7 +48,7 @@ class WaveformProcessor:
             files = [file for file in os.listdir() if file.endswith(".mat")]
             if not files:
                 print("Error: No valid source (.mat) files found. Exiting.")
-                sys.exit(-1)
+                raise FileNotFoundError("Error: No valid source (.mat) files found. Exiting.")
             for idx, filename in enumerate(files):
                 print(f"{idx}: {filename}")
 
@@ -61,27 +62,29 @@ class WaveformProcessor:
             finally:
                 continue
 
-        print(f"Loading waveform file '{filepath}'")
+        if self.debug:
+            print(f"Loading waveform file '{filepath}'")
 
         if not os.path.isfile(filepath):
             print(f"Error loading file {filepath}. File does not exist.")
-            sys.exit(-1)
+            raise FileNotFoundError(f"Error loading file {filepath}. File does not exist.")
 
         try:
             struct = self.eng.load(filepath)
             wf_struct = struct["original"]
         except KeyError:
             print(f"\nError: no field named \"original\" in file {filepath}")
-            sys.exit(-1)
+            raise ValueError(f"\nError: no field named \"original\" in file {filepath}")
         except Exception as e:
             print(f"\nError loading file '{filepath}'\n{e}\n")
-            sys.exit(-1)
+            raise IOError(f"\nError loading file '{filepath}'\n{e}\n")
         
         return (wf_struct, filepath)
 
     def process_qam(self, samp_rate, captured_samples):
         start = time()
-        print("Begin processing waveform")
+        if self.debug:
+            print("Begin processing waveform")
 
         #captured_samples = [float(dat) for dat in captured_samples]
 
@@ -96,15 +99,10 @@ class WaveformProcessor:
         captured_samples = matlab.double(captured_samples)
 
         samp_rate = matlab.double(samp_rate)
-        print(len(samp_rate))
-        print(type(samp_rate))
-
-        print(len(captured_samples))
-        print(type(captured_samples))
 
         data, nsym, errors, SNR = self.eng.processQAM(mod_order, block_length, symbol_rate, if_estimate,
-                                                      sym2drop, rcf_rolloff, original_samples,
-                                                      samp_rate, captured_samples, self.debug, nargout=4)
+                                                      sym2drop, rcf_rolloff, original_samples, samp_rate, 
+                                                      captured_samples, self.debug, self.diagnostics, nargout=4)
 
         end = time()
         if self.debug:
