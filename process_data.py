@@ -1,3 +1,5 @@
+# v2.0
+
 # this program will process data captured using the vdi_characterization program
 
 from multiprocessing import Pool
@@ -12,9 +14,9 @@ from waveform_analysis import WaveformProcessor
 
 
 # this is where waveform files are located
-waveform_dir = r"C:\Users\Frnot\Desktop\1m_BPSK_variable_baud"
+waveform_dir = r""
 # this is where the matlab source files are located
-original_waveform_dir = r"C:\Users\Frnot\Desktop\source waveforms"
+original_waveform_dir = r""
 
 output_file = os.path.join(waveform_dir, "results.csv")
 
