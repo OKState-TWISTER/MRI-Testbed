@@ -5,9 +5,10 @@
 from multiprocessing import Pool
 from multiprocessing.pool import ThreadPool
 import os
-import pandas
 import re
 from time import perf_counter as time
+
+import pandas
 
 from fileio import File_IO
 from waveform_analysis import WaveformProcessor
@@ -52,7 +53,9 @@ def main():
             results = pool.imap_unordered(process_dir_of_waveforms, dir_paths)
 
             for key, berav in results:
-                if isinstance(key, Exception):
+                if key is None:
+                    continue
+                elif isinstance(key, Exception):
                     print(f"\n!!!!!!!!!!!!!Error!!!!!!!!!!!!!\n{key}\n")
                 else:
                     print(f"\nAverage BER for {key}: {berav}\n")
@@ -80,11 +83,13 @@ def process_dir_of_waveforms(dirpath):
         if_estimate = float(ifregex.search(contents).group(1))
         owf_file = matregex.search(contents).group(1)
     else:
+        #TODO: remove
+        return None, None
         print(f"Could not find .info file for test dir {dir}. provide if_estimate manually:")
         inp = input("if_estimate: ")
         if_estimate = float(inp)
 
-    owf_fp = os.path.join(original_waveform_dir, owf_file)
+    owf_fp = os.path.join(original_waveform_dir, owf_file) if original_waveform_dir else owf_file
 
     print(f"IF estimate: {if_estimate}")
     print(f"Original waveform .mat filepath: {owf_fp}")
@@ -98,6 +103,8 @@ def process_dir_of_waveforms(dirpath):
     bersum = 0
     seg_count = 0
     for file in os.listdir(dirpath):
+        root, dir = os.path.split(dirpath)
+        longfn = os.path.join(dir, file)
         filepath = os.path.join(dirpath, file)
         samp_rate, samp_count, samples = fileio.load_waveform(filepath)
 
@@ -105,7 +112,7 @@ def process_dir_of_waveforms(dirpath):
         ber = proc.process_qam(samp_rate, samples)
         end = time()
 
-        print(f"BER for file '{file}': {ber} - computed in {end - start} seconds")
+        print(f"BER for file '{longfn}': {ber} - computed in {end - start} seconds")
         bersum += ber
         seg_count += 1
 
