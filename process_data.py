@@ -1,4 +1,4 @@
-# v2.0
+# v2.1
 
 # this program will process data captured using the vdi_characterization program
 
@@ -35,16 +35,16 @@ def main():
 
         # collect any already processed data
         if os.path.exists(output_file):
-            BER = pandas.read_csv(output_file, header=None, index_col=0).squeeze("columns").to_dict()
+            DATA = pandas.read_csv(output_file, header=None, index_col=0).squeeze("columns").to_dict()
         else:
-            BER = {}
-        print(BER)
+            DATA = {}
+        print(DATA)
         # list of all tests in the series
         dir_paths = [os.path.join(root, dir) for dir in d_names if os.listdir(os.path.join(root, dir))]
 
         for dir in dir_paths:
             testname = dir.replace("_waveforms", "")
-            if testname in BER:
+            if testname in DATA:
                 print(f"Data for test '{testname}' already exists. skipping")
                 dir_paths.remove(dir)
 
@@ -52,15 +52,15 @@ def main():
         with ThreadPool(processes=1) as pool:
             results = pool.imap_unordered(process_dir_of_waveforms, dir_paths)
 
-            for key, berav in results:
+            for key, data in results:
                 if key is None:
                     continue
                 elif isinstance(key, Exception):
                     print(f"\n!!!!!!!!!!!!!Error!!!!!!!!!!!!!\n{key}\n")
                 else:
-                    print(f"\nAverage BER for {key}: {berav}\n")
-                    BER[key] = berav
-                    pandas.DataFrame.from_dict(data=BER, orient='index').to_csv(output_file, header=False)
+                    print(f"\nDATA for {key}: {data}\n")
+                    DATA[key] = data
+                    pandas.DataFrame.from_dict(data=DATA, orient='index').to_csv(output_file, header=False)
 
 
         end = time()
@@ -99,8 +99,13 @@ def process_dir_of_waveforms(dirpath):
     except FileNotFoundError as e:
         return e, None
 
+
     # process waveforms in directory
+    SNRsum = 0
     bersum = 0
+    symerrsum = 0
+    bitsum = 0
+    symsum = 0
     seg_count = 0
     for file in os.listdir(dirpath):
         root, dir = os.path.split(dirpath)
@@ -109,17 +114,24 @@ def process_dir_of_waveforms(dirpath):
         samp_rate, samp_count, samples = fileio.load_waveform(filepath)
 
         start = time()
-        ber = proc.process_qam(samp_rate, samples)
+        SNR, nbits, biterr, nsyms, symerr = proc.process_qam(samp_rate, samples)
         end = time()
 
-        print(f"BER for file '{longfn}': {ber} - computed in {end - start} seconds")
-        bersum += ber
+        print(f"File '{longfn}' computed in {end - start} seconds")
+        SNRsum += SNR
+        bersum += biterr
+        symerrsum += symerr
+        bitsum += nbits
+        symsum += nsyms
         seg_count += 1
-
+   
+    SNRavg = SNRsum / seg_count
     berav = bersum / seg_count
+    symerravg = symerrsum / seg_count
+
 
     key = dir.replace("_waveforms", "")
-    return key, berav
+    return key, (SNRavg, bitsum, berav, symsum, symerravg)
 
 
 if __name__ == "__main__":
