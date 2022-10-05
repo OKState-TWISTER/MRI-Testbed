@@ -127,7 +127,8 @@ class WaveformProcessor:
             # For QPSK only:
             print(f"Predicted QPSK SER is {SER_theory} ({round(SER_theory*nsym)} symbols)\n")
 
-        return biterr
+        # SNR, nbits, biterr, nsyms, symerr
+        return (SNR, (nsym * math.log2(self.mod_order)), biterr, nsym, symerr)
 
 
 if __name__ == '__main__':
