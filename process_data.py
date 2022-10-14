@@ -15,11 +15,11 @@ from waveform_analysis import WaveformProcessor
 
 
 # this is where waveform files are located
-waveform_dir = r""
+waveform_dir = r"C:\Users\kstreck\Desktop\BPSK_Variable_Baud_Data\Oscilloscope_Captures\2GBd_2022-10-03T1539_waveforms"
 # this is where the matlab source files are located
-original_waveform_dir = r""
+original_waveform_dir = r"C:\Users\kstreck\Desktop\Source Waveforms"
 
-output_file = os.path.join(waveform_dir, "results.csv")
+output_file = os.path.join(waveform_dir, "trash_results.csv")
 
 fileio = File_IO(waveform_dir)
 
@@ -39,6 +39,7 @@ def main():
         else:
             DATA = {}
         print(DATA)
+
         # list of all tests in the series
         dir_paths = [os.path.join(root, dir) for dir in d_names if os.listdir(os.path.join(root, dir))]
 
@@ -49,7 +50,7 @@ def main():
                 dir_paths.remove(dir)
 
         start = time()
-        with ThreadPool(processes=1) as pool:
+        with ThreadPool(processes=4) as pool:  # <------------------  CHANGE NUMBER OF PROCESSES HERE !
             results = pool.imap_unordered(process_dir_of_waveforms, dir_paths)
 
             for key, data in results:
@@ -95,14 +96,14 @@ def process_dir_of_waveforms(dirpath):
     print(f"Original waveform .mat filepath: {owf_fp}")
 
     try:
-        proc = WaveformProcessor(if_estimate, debug=False, org_waveform=owf_fp)
+        proc = WaveformProcessor(if_estimate, debug=False, org_waveform=owf_fp) # Change debug to true to see eye information.
     except FileNotFoundError as e:
         return e, None
 
 
     # process waveforms in directory
     SNRsum = 0
-    bersum = 0
+    biterrsum = 0
     symerrsum = 0
     bitsum = 0
     symsum = 0
@@ -114,24 +115,25 @@ def process_dir_of_waveforms(dirpath):
         samp_rate, samp_count, samples = fileio.load_waveform(filepath)
 
         start = time()
-        SNR, nbits, biterr, nsyms, symerr = proc.process_qam(samp_rate, samples)
+        SNR, nbits, nbiterrors, nsyms, nsymerrors = proc.process_qam(samp_rate, samples)
         end = time()
 
         print(f"File '{longfn}' computed in {end - start} seconds")
         SNRsum += SNR
-        bersum += biterr
-        symerrsum += symerr
+        biterrsum += nbiterrors
+        symerrsum += nsymerrors
         bitsum += nbits
         symsum += nsyms
         seg_count += 1
    
     SNRavg = SNRsum / seg_count
-    berav = bersum / seg_count
-    symerravg = symerrsum / seg_count
+    #berav = bersum / seg_count
+    #symerravg = symerrsum / seg_count
 
 
     key = dir.replace("_waveforms", "")
-    return key, (SNRavg, bitsum, berav, symsum, symerravg)
+    #return key, (SNRavg, bitsum, berav, symsum, symerravg)
+    return key, (SNRavg, bitsum, biterrsum, symsum, symerrsum)
 
 
 if __name__ == "__main__":

@@ -22,7 +22,7 @@ import matlab.engine
 class WaveformProcessor:
     def __init__(self, if_estimate=None, debug=False, org_waveform=None):
         self.debug = debug
-        self.diagnostics = False
+        self.diagnostics = True
 
         print("Initializing MATLAB engine")
         start = time()
@@ -114,21 +114,21 @@ class WaveformProcessor:
         # SER_theory = erfc(sqrt(0.5*(10.^(SNR/10)))) - (1/4)*(erfc(sqrt(0.5*(10.^(SNR/10))))).^2; # original
         SER_theory = self.eng.erfc(math.sqrt(0.5 * (10 ** (SNR / 10)))) - (1 / 4) * (self.eng.erfc(math.sqrt(0.5 * (10 ** (SNR / 10))))) ** 2
 
-        bits = errors["bit"]
-        biterr = bits / (nsym * math.log2(self.mod_order))
-        syms = errors["sym"]
-        symerr = syms / nsym
+        n_bit_errors = errors["bit"]
+        BER = n_bit_errors / (nsym * math.log2(self.mod_order))
+        n_sym_errors = errors["sym"]
+        SER = n_sym_errors / nsym
 
         if self.debug:
             print(f"\nAnalyzing {nsym} symbols:\n")
             print(f"SNR is {SNR} dB\n")
-            print(f"Observed BER is {biterr} ({bits} bits)\n")
-            print(f"Observed SER is {symerr} ({syms} symbols)\n")
+            print(f"Observed BER is {BER} ({n_bit_errors} bits)\n")
+            print(f"Observed SER is {SER} ({n_sym_errors} symbols)\n")
             # For QPSK only:
-            print(f"Predicted QPSK SER is {SER_theory} ({round(SER_theory*nsym)} symbols)\n")
+            # print(f"Predicted QPSK SER is {SER_theory} ({round(SER_theory*nsym)} symbols)\n")
 
         # SNR, nbits, biterr, nsyms, symerr
-        return (SNR, (nsym * math.log2(self.mod_order)), biterr, nsym, symerr)
+        return (SNR, (nsym * math.log2(self.mod_order)), n_bit_errors, nsym, n_sym_errors)
 
 
 if __name__ == '__main__':
@@ -136,8 +136,8 @@ if __name__ == '__main__':
     from fileio import File_IO
 
     # this is where waveform files are located
-    waveform_dir = r"C:\Users\UTOL\Desktop\MRI-Testbed\Data\mendis_data_variable_span\bpsk_75mm_2022-08-18T1527_waveforms"
-    if_estimate = 7e9
+    waveform_dir = r"C:\Users\kstreck\Desktop\BPSK_Variable_Baud_Data\Oscilloscope_Captures\8GBd_2022-10-03T1531_waveforms"
+    if_estimate = 12.5e9
 
     fileio = File_IO(waveform_dir)
 

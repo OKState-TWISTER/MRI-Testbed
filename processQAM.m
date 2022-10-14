@@ -2,6 +2,9 @@ function [data, nsym, errors, SNR] = processQAM(mod_order, block_length, sym_rat
 % processQAM decodes the QAM waveform contained in the structure waveform.
 % waveform contains all previously-loaded data and settings.
 
+%diagnostics_on = 1;
+%debug = 1;
+
 %% EXTRACT SETTINGS FROM THE STRUCTURE
 % Set these parameters correctly before running the script.
 %% these can be loaded from the original .mat waveform struct
