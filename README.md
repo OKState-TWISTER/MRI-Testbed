@@ -1,3 +1,3 @@
 # Major Research Instrumentation System Testbed
 
-An assortment of utilities that aim to assist in the use of the MRI system
+An application to automate experiments using the full TWISTER system
