@@ -1,66 +1,106 @@
-function [data, nsym, errors, SNR] = processQAM(mod_order, block_length, sym_rate, IF_estimate, symbols_to_drop, rcf_rolloff, original_samples, samp_rate, captured_samples, debug, diagnostics_on)
+function [data, nsym, errors, SNR] = processQAM_V2(M, block_length, symbol_rate, fc, symbols_to_drop, rcf_rolloff, original_sample_frame, rate_samp, captured_samples, debug, diagnostics_on)
 % processQAM decodes the QAM waveform contained in the structure waveform.
 % waveform contains all previously-loaded data and settings.
 
+%fprintf("\nDEBUG and DIAGNOSTICS are hard-coded on in processQAM.m!\n");
 %diagnostics_on = 1;
 %debug = 1;
 
 %% EXTRACT SETTINGS FROM THE STRUCTURE
 % Set these parameters correctly before running the script.
-%% these can be loaded from the original .mat waveform struct
-M = mod_order; % Equal to the number of QAM symbols.
+%% these can be loaded from the original .mat waveform struct.
+
+% M is the number of QAM symbols; usually a power of 2.
 %block_length = block_length; % number of symbols per marker frame.
-symbol_rate = sym_rate; % symbol rate
-%symbol_rate = sym_rate*(63.90039/64);
-
-signal = captured_samples;
-sample_rate = samp_rate; % Oscilloscope sample rate.
-f_LO = IF_estimate;
-
-original_sample_frame = original_samples;
+% symbol rate is the number of symbols per second
+signal = captured_samples(:);
+% rate_samp is the oscilloscope sample rate.
+% fc is the center frequency of the signal.
 original_symbol_frame = qamdemod(original_sample_frame, M);
 
-modtype = sprintf("%i-QAM", M);
-if M == 2
-    modtype = "BPSK";
-elseif M == 4
-    modtype = "QPSK";
-end
-
-%% EXTRACT, SCALE, AND INTERPOLATE THE WAVEFORM
+%% MIX WITH THE LOCAL OSCILLATOR
 % Create the time vector
 tmin = 0;
-tmax = tmin + (1/sample_rate)*(length(signal)-1);
-time_full = (tmin:(1/sample_rate):(tmax))';
+tmax = tmin + (1/rate_samp)*(length(signal)-1);
+time_full = (tmin:(1/rate_samp):(tmax))';
+% Mix the signal
+signal = signal.*exp(1j*2*pi*fc*time_full);
+
+%% FILTER OUT THE 2x FREQUENCY COMPONENT via RRCF
+signal_I = real(signal);
+signal_Q = imag(signal);
+
+% Take the Fourier Transform (needed for cosine filtering)
+%[f_S2, s_S2] = singfourSAFE(t_upsampled, S2_upsampled);
+[f_spectrum, spectrum_I] = singfourSAFE(time_full, signal_I);
+[~,    spectrum_Q] = singfourSAFE(time_full, signal_Q);
+
+% Build the root-raised cosine filter
+% center frequency, bandwidth, and rolloff are passed in as arguments.
+s_rrcf = rrcf(f_spectrum, 0, symbol_rate, rcf_rolloff);
+
+% Apply the RRCF
+%s_S3 = s_S2.*(s_rrcf);
+spectrum_I = spectrum_I.*(s_rrcf);
+spectrum_Q = spectrum_Q.*(s_rrcf);
+
+% IFFT back to time domain
+%[~, S3_pulseshape] = invsingfourSAFE(f_S2, s_S3);
+[~, signal_I] = invsingfourSAFE(f_spectrum, spectrum_I);
+[~, signal_Q] = invsingfourSAFE(f_spectrum, spectrum_Q);
+
+% Recombine I and Q channels
+signal = signal_I + 1j*signal_Q;
+
+
+%% EXTRACT, SCALE, AND INTERPOLATE THE WAVEFORM
+% This occurs after mixing so we can sample the baseband waveform at a
+% lower sampling rate.  Otherwise, the Nyquist constraint would force us to
+% use a high resampling rate to avoid ailising the carrier, which consumes
+% more memory and results in higher runtime.
 
 % Calculate samples per symbol, and force it do be an integer.
 % (An integer SPS is required by communication toolbox system objects)
-sps = 8; %2*floor(sample_rate/(2*symbol_rate)); % sps should be even.  I don't know why.
+% Different RCF rolloffs have varrying excess bandwidth.
+safety = 1.1 + rcf_rolloff; 
+
+% Use this sample rate if you have NOT mixed the signal down.
+%rate_samp_min = ceil(2*(fc + (safety)*symbol_rate/2));
+
+% Use this sample rate for a baseband signal.
+rate_samp_min = (2*symbol_rate*safety);
+
+% Observe the Nyquist limit.
+sps_min = ceil(rate_samp_min/symbol_rate);
+sps = 2*ceil(sps_min/2); % SPS should be even.
+
+
 if debug
-    fprintf("Original SPS is %.2f, New is %i.\n", sample_rate/symbol_rate, sps)
+    fprintf("Original SPS is %.2f, new is %i.\n", rate_samp/symbol_rate, sps)
 end
-sample_rate = sps*symbol_rate;
+rate_samp = sps*symbol_rate;
 
 % Create downsampled time (query) vector
-time = (0:(1/sample_rate):tmax)';
+time = (0:(1/rate_samp):tmax)';
 
 % Downsample by interpolation
-signal = interp1(time_full, signal, time, 'makima');
+signal = interp1(time_full, signal, time, 'spline');
 
 % Make the time-domain waveform zero-mean
 signal = signal - mean(signal);
 
 % Apply a uniform gain so signal peak is unity
 signal = signal/max(abs(signal));
-
+%signal = signal/(sqrt(mean(abs(signal.^2))));
 
 %% MIX WITH THE LOCAL OSCILLATOR
 % Mix the signal
-signal = signal.*exp(1j*2*pi*f_LO*time);
+%signal = signal.*exp(1j*2*pi*fc*time);
+
 
 % Diagnostics
 if diagnostics_on
-    figure(100); clf; hold on;
+    figure(100); clf; hold on; axis equal;
     title("Mixed signal")
     plot(signal, '.', 'MarkerSize', 5);
     % plot(8*signal, '.', 'MarkerSize', 5);
@@ -69,7 +109,7 @@ end
 %% AUTOMATIC GAIN CONTROL
 % Attempts to smooth out fading and hold the signal power constant
 automaticGainControl = comm.AGC;
-    automaticGainControl.AdaptationStepSize = .0001;
+    automaticGainControl.AdaptationStepSize = .001;
     automaticGainControl.DesiredOutputPower = 1; %W
     automaticGainControl.MaxPowerGain = 60; % dB
 
@@ -83,10 +123,11 @@ if diagnostics_on
     figure(100);
     title("AGC")
     plot(signal, '.', 'MarkerSize', 4);
+    axis equal;
     
     % Power amplification level
     %{
-    figure(1); clf;
+    figure(101); clf;
     title("Power amplification level")
     plot(time, powerLevel);
     xlabel("Time (s)"); ylabel("Power (units?)");
@@ -95,10 +136,11 @@ end
 
 %% RAISED COSINE FILTERING 
 % Removes the 2x frequency component and performs pulse-shaping.
+%{
 rxfilter = comm.RaisedCosineReceiveFilter;
     rxfilter.Shape = 'Square root';
     rxfilter.RolloffFactor = rcf_rolloff;
-    rxfilter.FilterSpanInSymbols = 12;
+    rxfilter.FilterSpanInSymbols = 6;
     rxfilter.InputSamplesPerSymbol = sps;
     rxfilter.DecimationFactor = 1;
     rxfilter.DecimationOffset = 0;
@@ -113,29 +155,33 @@ if diagnostics_on
     figure(100);
     title("Filtering")
     plot(signal, '.', 'MarkerSize', 3);
+    axis equal;
 end
+%}
 
 
 warning('off','comm:CoarseFrequencyCompensator:NeedTooMuchMemory');
 %% COARSE FREQUENCY COMPENSATION
 % Corrects Clock Skew
+modtype = "QAM";
+if M == 2
+    modtype = "BPSK";
+elseif M == 4
+    modtype = "QPSK";
+end
 coarseFrequencyComp = comm.CoarseFrequencyCompensator;
-    coarseFrequencyComp.Modulation = 'QAM';
+    coarseFrequencyComp.Modulation = modtype;
     % coarseFrequencyComp.Algorithm = 'FFT-based';
     % Use Correlation-based for HDL implementation, but see documentation
     % first.
-    coarseFrequencyComp.FrequencyResolution = 1e3; % Hz
+    coarseFrequencyComp.FrequencyResolution = 10e4; % Hz
     %coarseFrequencyComp.MaximumFrequencyOffset = 10e3; % Hz
-    coarseFrequencyComp.SampleRate = sample_rate; % Hz
+    coarseFrequencyComp.SampleRate = rate_samp; % Hz
     %coarseFrequencyComp.SamplesPerSymbol = sps; % Hz, for OQPSK only
 
-[signal, errorFreqOffset] = coarseFrequencyComp(signal);
+[signal, ~] = coarseFrequencyComp(signal);
 upsampled = signal;
 
-
-% From here on, we're working with a samples of the waveform.
-% Create a timing vector for symbol time.
-time_samples_full = 0:(1/symbol_rate):((length(signal)-1)*(1/symbol_rate));
 
 if diagnostics_on
     %fprintf('Freq. Comp.\n');
@@ -144,7 +190,9 @@ if diagnostics_on
     figure(100);
     title("Coarse freq comp")
     plot(signal, '.', 'MarkerSize', 2);
+    axis equal;
 end
+
 
 %% TIMING RECOVERY
 % (Symbol Synchronization)
@@ -152,13 +200,22 @@ symbolSync = comm.SymbolSynchronizer;
     symbolSync.Modulation = 'PAM/PSK/QAM';
     symbolSync.TimingErrorDetector = 'Zero-Crossing (decision-directed)';
     symbolSync.SamplesPerSymbol = sps;
-    symbolSync.DampingFactor = 10;
-    symbolSync.NormalizedLoopBandwidth = 0.001;
+    symbolSync.DampingFactor = 1;
+    symbolSync.NormalizedLoopBandwidth = 0.002;
     symbolSync.DetectorGain = 1;
 
-    
 %signal(isnan(signal)) = 0;
 [signal, timing_error] = symbolSync(signal);
+
+% From here on, we're working with samples of the waveform.
+% Create a timing vector for symbol time.
+time_samples_full = 0:(1/symbol_rate):((length(signal)-1)*(1/symbol_rate));
+%time_samples_full_2 = [time(1:8:end)]; % Needs an extra sample at the end.
+
+
+%len_after = length(signal)
+%len_before - len_after
+%len_before / len_after
 
 if diagnostics_on
     %fprintf('Symbol Sync (timing recovery)\n');
@@ -167,13 +224,14 @@ if diagnostics_on
     figure(100);
     title("Symbol Sync")
     plot(signal, '.', 'MarkerSize', 1);
+    axis equal;
     
     % Timing error
     
-    figure(2); clf; hold on;
+    figure(102); clf; hold on;
         timing_unwrapped = unwrap(timing_error*2*pi)/(2*pi);
         timing_unwrapped = timing_unwrapped - timing_unwrapped(end);
-        plot(time_samples_full,timing_unwrapped, '.');
+        plot(time,timing_unwrapped, '.');
         title('Symbol Timing Error (timing recovery)');
         xlabel('Time (s)');
         ylabel('Timing Error (samples)');
@@ -182,28 +240,35 @@ end
 
 %% FINE FREQUENCY COMPENSATOR
 % (Performs Carrier Synchronization)
+modtype = "QAM";
+if M == 2
+    modtype = "BPSK";
+elseif M == 4
+    modtype = "QPSK";
+end
+
 carrSync = comm.CarrierSynchronizer;
-    carrSync.Modulation = 'QAM';
+    carrSync.Modulation = modtype;
     carrSync.ModulationPhaseOffset = 'Auto';
     %carrSync.CustomPhaseOffset = 0;
     carrSync.SamplesPerSymbol = 1;
-    carrSync.DampingFactor = 1;
-    carrSync.NormalizedLoopBandwidth = 0.001; % 0.01
+    carrSync.DampingFactor = 0.707;
+    carrSync.NormalizedLoopBandwidth = 0.005; % 0.01
 
 
 carrSync_eye = comm.CarrierSynchronizer;
     carrSync_eye.Modulation = carrSync.Modulation;
-    carrSync_eye.ModulationPhaseOffset = 'Auto';
-    %carrSync_eye.CustomPhaseOffset = 0;
+    carrSync_eye.ModulationPhaseOffset = carrSync.ModulationPhaseOffset;
+    %carrSync_eye.CustomPhaseOffset = carrSync.CustomPhaseOffset;
     carrSync_eye.SamplesPerSymbol = sps; %fs/(baud)
-    carrSync_eye.DampingFactor = 1;
-    carrSync_eye.NormalizedLoopBandwidth = 0.01; % 0.01
+    carrSync_eye.DampingFactor = carrSync.DampingFactor;
+    carrSync_eye.NormalizedLoopBandwidth = carrSync.NormalizedLoopBandwidth; % 0.01
 
     
 [signal, error_phase] = carrSync(signal);
-[signal_eye, ~] = carrSync_eye(upsampled);
+[full_signal_ffc, ~] = carrSync_eye(upsampled);
 
-signal_eye = circshift(signal_eye, 0);
+full_signal_ffc = circshift(full_signal_ffc, 0);
 
 %fprintf("%i\n", round(timing_error(1)*sample_rate))
 
@@ -222,11 +287,17 @@ return
 %}
 
 k = 4; %4*block_length;
-signal_eye = signal_eye((1+symbols_to_drop*sps):end);
+signal_eye = full_signal_ffc((1+symbols_to_drop*sps):end);
 eye_traces = reshape(signal_eye(1:(end-mod(length(signal_eye), k*sps))), k*sps, []);
-eye_traces = eye_traces(:, (1:1:600))./sqrt(2);
+eye_traces = real(eye_traces(:, (1:1:600))./sqrt(2));
 
 if diagnostics_on
+
+    if M == 2 || M == 4
+        label = modtype;
+    else
+        label = sprintf("%i-QAM", M);
+    end
     %fprintf('Carrier Sync.\n');
     
     % Main plot
@@ -237,19 +308,28 @@ if diagnostics_on
     figure(100);
         title("Carrier Sync")
         plot(signal, '.', 'MarkerSize', 1);
+        axis equal;
         
-    figure(101);
+    figure(103);
         plot(time(1:(k*sps))*1e9, real(eye_traces*exp(1j*pi/4)), '-', 'Color', [1, 1, 1, 0.1]);
-        title(sprintf("%.1f Gbd %s Eye Diagram", symbol_rate/1e9, modtype));
+        title(sprintf("%.1f Gbd %s Eye Diagram", symbol_rate/1e9, label));
         xlabel("Time (ns)");
         ylabel("Arbitrary Units");
         
     % Phase error
-    figure(3); clf;
+    figure(104); clf;
         plot(error_phase);
         title('Phase Error (fine frequency compensator)');
         xlabel('symbol number');
         ylabel('radians');
+
+    figure(108); clf; hold on;
+        plot(time, real(full_signal_ffc), '-');
+        plot(time, imag(full_signal_ffc), '-');
+
+        plot(time_samples_full - 4/rate_samp, real(signal), 'x', 'MarkerSize', 5);
+        plot(time_samples_full - 4/rate_samp, imag(signal), 'x', 'MarkerSize', 5);
+
 
 end
 
@@ -271,7 +351,7 @@ n_frames = floor((time_samples_full(end)-time_samples_full(1))/t_frame);
 
 % Duplicate the original symbol vector to match measured sample dimensions.
 original_symbols = repmat(original_symbol_frame, n_frames, 1);
-original_samples = repmat(original_sample_frame, n_frames, 1);
+original_sample_frame = repmat(original_sample_frame, n_frames, 1);
 
 % Create symbol time vector (subset of the full-length symbol-time vector)
 time_samples = time_samples_full(1:(block_length*n_frames));
@@ -312,7 +392,7 @@ shift_ideal = 0;
 % rotation combination that yields the minimum number of errors.
 for n = 0:3
     % Set phase offset (rotation) angle
-    phi_0 = n*pi/2 + pi/4;
+    phi_0 = n*pi/2;
     
     % Demodulate the sampled symbols.
     symbols = qamdemod(exp(1j*phi_0)*samples, M);
@@ -328,12 +408,13 @@ for n = 0:3
 
     % Diagnostic: see how the symbols compare. Helps debug rotation and
     % decoding problems.
+    
     %{
-    check = 300:330;
+    check = 1:31;
     fprintf("\n Decoded: ");
-    fprintf("%.0f, ", symbols(check));
+    fprintf("%i, ", symbols(check));
     fprintf("\n Original: ");
-    fprintf("%.0f, ", original_symbols(check));
+    fprintf("%i, ", original_symbols(check));
     fprintf("\n");
     %}
 
@@ -364,34 +445,35 @@ symbols = circshift(symbols, shift_ideal);
 % The difference between the two is noise (assuming correct scaling).
 
 samp_meas = samples/mean(abs(samples));
-samp_orig = original_samples/mean(abs(original_samples));
+samp_orig = original_sample_frame/mean(abs(original_sample_frame));
 
 % Contains both noise and ISI
 % Get the VOLTAGE SIGNAL noise (not power).
-noise_v = (samp_meas - samp_orig);
+noise_voltage = (samp_meas - samp_orig);
 
 % Get the SNR, in dB.  Takes voltages as inputs, not powers.
-SNR = snr(samp_orig, noise_v);
+SNR = snr(samp_orig, noise_voltage);
 
 if diagnostics_on
     % Show noise on a constellation diagram
-    figure(4); clf; hold on;
-    plot(awgn(samp_orig, SNR), '.');
-    plot(samp_meas, '.');
-    plot(samp_orig, '+');
+    figure(105); clf; hold on;
+    plot(awgn(samp_orig + j*eps, SNR), '.');
+    plot(samp_meas + j*eps, '.');
+    plot(samp_orig + j*eps, '+');
     title("Noise Comparison Constellation");
     legend("AWGN at SNR", "Measured", "Ideal");
+    axis equal;
 
     % Show noise spectrum
-    %figure(5); clf; hold on;
-    %[f, s_n_meas] = singfourSAFE(time_samples, noise_v.^2);
-    %[~, s_n_awgn] = singfourSAFE(time_samples, (awgn(samp_orig, SNR) - samp_orig).^2);
-    %plot(f, abs(s_n_meas), f, abs(s_n_awgn));
-    %title("Noise Power Spectrum");
-    %xlabel("Frequency (Hz)");
+    figure(106); clf; hold on;
+    [f, s_n_meas] = singfourSAFE(time_samples, noise_voltage.^2);
+    [~, s_n_awgn] = singfourSAFE(time_samples, (awgn(samp_orig, SNR) - samp_orig).^2);
+    plot(f, abs(s_n_meas), f, abs(s_n_awgn));
+    title("Noise Power Spectrum");
+    xlabel("Frequency (Hz)");
     
     % Mark sample times on time-domain waveform
-    figure(6); clf; hold on;
+    figure(107); clf; hold on;
     plot(time_samples, imag(samples), 'x');
     plot(time_samples, real(samples), 'x');
     title("Samples in Time Domain");
