@@ -1,4 +1,4 @@
-function [data, nsym, errors, SNR] = processQAM_V2(M, block_length, symbol_rate, fc, symbols_to_drop, rcf_rolloff, original_sample_frame, rate_samp, captured_samples, debug, diagnostics_on)
+function [data, nsym, errors, SNR] = processQAM(M, block_length, symbol_rate, fc, symbols_to_drop, rcf_rolloff, original_sample_frame, rate_samp, captured_samples, debug, diagnostics_on)
 % processQAM decodes the QAM waveform contained in the structure waveform.
 % waveform contains all previously-loaded data and settings.
 
@@ -52,6 +52,12 @@ spectrum_Q = spectrum_Q.*(s_rrcf);
 % Recombine I and Q channels
 signal = signal_I + 1j*signal_Q;
 
+if diagnostics_on
+    figure(100); clf; hold on; axis equal;
+    title("Mixed and filtered")
+    plot(signal, '.', 'MarkerSize', 5);
+    % plot(8*signal, '.', 'MarkerSize', 5);
+end
 
 %% EXTRACT, SCALE, AND INTERPOLATE THE WAVEFORM
 % This occurs after mixing so we can sample the baseband waveform at a
@@ -74,6 +80,8 @@ rate_samp_min = (2*symbol_rate*safety);
 sps_min = ceil(rate_samp_min/symbol_rate);
 sps = 2*ceil(sps_min/2); % SPS should be even.
 
+% NOTE: SPS should almost certianly be 4.
+
 
 if debug
     fprintf("Original SPS is %.2f, new is %i.\n", rate_samp/symbol_rate, sps)
@@ -86,6 +94,7 @@ time = (0:(1/rate_samp):tmax)';
 % Downsample by interpolation
 signal = interp1(time_full, signal, time, 'spline');
 
+%{
 % Make the time-domain waveform zero-mean
 signal = signal - mean(signal);
 
@@ -96,12 +105,12 @@ signal = signal/max(abs(signal));
 %% MIX WITH THE LOCAL OSCILLATOR
 % Mix the signal
 %signal = signal.*exp(1j*2*pi*fc*time);
-
+%}
 
 % Diagnostics
 if diagnostics_on
     figure(100); clf; hold on; axis equal;
-    title("Mixed signal")
+    title("Downsampled")
     plot(signal, '.', 'MarkerSize', 5);
     % plot(8*signal, '.', 'MarkerSize', 5);
 end
@@ -109,8 +118,8 @@ end
 %% AUTOMATIC GAIN CONTROL
 % Attempts to smooth out fading and hold the signal power constant
 automaticGainControl = comm.AGC;
-    automaticGainControl.AdaptationStepSize = .001;
-    automaticGainControl.DesiredOutputPower = 1; %W
+    automaticGainControl.AdaptationStepSize = .002;
+    automaticGainControl.DesiredOutputPower = .005; %W
     automaticGainControl.MaxPowerGain = 60; % dB
 
 [signal, powerLevel] = automaticGainControl(signal);
@@ -200,8 +209,8 @@ symbolSync = comm.SymbolSynchronizer;
     symbolSync.Modulation = 'PAM/PSK/QAM';
     symbolSync.TimingErrorDetector = 'Zero-Crossing (decision-directed)';
     symbolSync.SamplesPerSymbol = sps;
-    symbolSync.DampingFactor = 1;
-    symbolSync.NormalizedLoopBandwidth = 0.002;
+    symbolSync.DampingFactor = 5;
+    symbolSync.NormalizedLoopBandwidth = 0.02;
     symbolSync.DetectorGain = 1;
 
 %signal(isnan(signal)) = 0;
@@ -252,8 +261,8 @@ carrSync = comm.CarrierSynchronizer;
     carrSync.ModulationPhaseOffset = 'Auto';
     %carrSync.CustomPhaseOffset = 0;
     carrSync.SamplesPerSymbol = 1;
-    carrSync.DampingFactor = 0.707;
-    carrSync.NormalizedLoopBandwidth = 0.005; % 0.01
+    carrSync.DampingFactor = 10;
+    carrSync.NormalizedLoopBandwidth = 0.05; % 0.01
 
 
 carrSync_eye = comm.CarrierSynchronizer;
@@ -270,26 +279,6 @@ carrSync_eye = comm.CarrierSynchronizer;
 
 full_signal_ffc = circshift(full_signal_ffc, 0);
 
-%fprintf("%i\n", round(timing_error(1)*sample_rate))
-
-%{
-nsym = 1;
-SNR = 10;
-
-errors = struct;
-errors.bit = 10;
-errors.sym = 10;
-
-data = struct;
-data.symbols = 100;
-data.samples = 100;
-return
-%}
-
-k = 4; %4*block_length;
-signal_eye = full_signal_ffc((1+symbols_to_drop*sps):end);
-eye_traces = reshape(signal_eye(1:(end-mod(length(signal_eye), k*sps))), k*sps, []);
-eye_traces = real(eye_traces(:, (1:1:600))./sqrt(2));
 
 if diagnostics_on
 
@@ -298,24 +287,32 @@ if diagnostics_on
     else
         label = sprintf("%i-QAM", M);
     end
-    %fprintf('Carrier Sync.\n');
-    
-    % Main plot
-    
-    figure(100);
-        plot(signal_eye, '.', 'MarkerSize', 1);
-        
-    figure(100);
-        title("Carrier Sync")
-        plot(signal, '.', 'MarkerSize', 1);
-        axis equal;
-        
+
+    % Eye diagram
+    % eye_traces will be a pxq array, where p is the number of samples to 
+    % show on the eye diagram (samples per symbol times number of symbols 
+    % to display), and q is the number of traces we want to show.
+    n_traces = 600;
+    k = 4; %4*block_length;
+    % Knock off bad samples
+    signal_eye = full_signal_ffc((1+symbols_to_drop*sps):end);
+    % reshape the array to the pxq dimensions described above.
+    eye_traces = reshape(signal_eye(1:(end-mod(length(signal_eye), k*sps))), k*sps, []);
+    % Show the real axis, and take traces from the end of the data in case
+    % symbols_to_drop isn't large enough.
+    eye_traces = real(eye_traces(:, ((end-n_traces):1:(end-1))));
     figure(103);
-        plot(time(1:(k*sps))*1e9, real(eye_traces*exp(1j*pi/4)), '-', 'Color', [1, 1, 1, 0.1]);
+        plot(time(1:(k*sps))*1e9, real(eye_traces), '-', 'Color', [1, 1, 1, 0.1]);
         title(sprintf("%.1f Gbd %s Eye Diagram", symbol_rate/1e9, label));
         xlabel("Time (ns)");
         ylabel("Arbitrary Units");
         
+    % Main plot
+    figure(100);
+        %plot(signal_eye, '.', 'MarkerSize', 1);
+        plot(signal, '.', 'MarkerSize', 1);
+        axis equal;
+    
     % Phase error
     figure(104); clf;
         plot(error_phase);
@@ -323,21 +320,20 @@ if diagnostics_on
         xlabel('symbol number');
         ylabel('radians');
 
+    % Time-domain trace with sample times marked
     figure(108); clf; hold on;
         plot(time, real(full_signal_ffc), '-');
         plot(time, imag(full_signal_ffc), '-');
 
         plot(time_samples_full - 4/rate_samp, real(signal), 'x', 'MarkerSize', 5);
         plot(time_samples_full - 4/rate_samp, imag(signal), 'x', 'MarkerSize', 5);
-
-
 end
 
 
 %% SCALE AND TRUNCATE THE PROCESSED WAVEFORM
 
 % Scaling
-samples_full = signal/max(abs(signal));
+samples_full = signal/mean(abs(signal));
 
 % Truncate the waveform to remove settling time
 start = symbols_to_drop;
