@@ -6,11 +6,11 @@ N = 4;
 rate_sym = 10e9; %3.19997e9; % symbol rate
 fc_original = 12.5e9;
 beta = 0.9;
-filepath = 'C:\\Users\kstreck\Desktop\TestWaveforms';
+filepath = 'C:\Users\UTOL\Desktop\MRI-Testbed-main';
 diagnostics_on = 1;
 decode_on = 1;
 plots_on = 1;
-apply_transfer_function = 1;
+apply_transfer_function = 0;
 
 %% Tweaking the carrier frequency
 % Adjust this so that we get an integer number of carrier cycles over the
@@ -266,6 +266,7 @@ if decode_on
         thicknesses = [0, 4e-3, 0];
         indicies = [1, 1, 1]; % Index of Si is 3.418
         stack = [thicknesses(:), indicies(:)];
+        
         
         [S11, S21] = MakeStackAngle2(f_stack, stack, ...
             incident_angle, polarization);
