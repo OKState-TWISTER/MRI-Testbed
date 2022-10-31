@@ -223,7 +223,8 @@ def measure_ber(scope, waveform_proc, analyze):
         print(f"Captured sample rate: '{samp_rate}'")
 
     if analyze:
-        ber = waveform_proc.process_qam(samp_rate, waveform)
+        (SNR, nbits, nbiterr, nsym, nsymerr) = waveform_proc.process_qam(samp_rate, waveform)
+        ber = nbiterr/nbits
     else:
         ber = 0
 
