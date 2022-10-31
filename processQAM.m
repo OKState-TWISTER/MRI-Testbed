@@ -19,6 +19,7 @@ signal = captured_samples(:);
 original_symbol_frame = qamdemod(original_sample_frame, M);
 
 if debug
+    %{
     M
     block_length
     symbol_rate
@@ -26,7 +27,15 @@ if debug
     symbols_to_drop
     rcf_rolloff
     rate_samp
+    %}
 end
+
+% Make the time-domain waveform zero-mean
+signal = signal - mean(signal);
+
+% Apply a uniform gain so signal peak is unity
+%signal = signal/mean(abs(signal));
+signal = signal/(sqrt(mean(abs(signal.^2))));
 
 %% MIX WITH THE LOCAL OSCILLATOR
 % Create the time vector
@@ -105,13 +114,6 @@ time = (0:(1/rate_samp):tmax)';
 % Downsample by interpolation
 signal = interp1(time_full, signal, time, 'spline');
 
-%{
-% Make the time-domain waveform zero-mean
-signal = signal - mean(signal);
-
-% Apply a uniform gain so signal peak is unity
-signal = signal/max(abs(signal));
-%signal = signal/(sqrt(mean(abs(signal.^2))));
 
 %% MIX WITH THE LOCAL OSCILLATOR
 % Mix the signal
@@ -130,7 +132,7 @@ end
 % Attempts to smooth out fading and hold the signal power constant
 automaticGainControl = comm.AGC;
     automaticGainControl.AdaptationStepSize = .002;
-    automaticGainControl.DesiredOutputPower = .005; %W
+    automaticGainControl.DesiredOutputPower = 1; %W
     automaticGainControl.MaxPowerGain = 60; % dB
 
 [signal, powerLevel] = automaticGainControl(signal);
@@ -221,7 +223,7 @@ symbolSync = comm.SymbolSynchronizer;
     symbolSync.TimingErrorDetector = 'Zero-Crossing (decision-directed)';
     symbolSync.SamplesPerSymbol = sps;
     symbolSync.DampingFactor = 5;
-    symbolSync.NormalizedLoopBandwidth = 0.02;
+    symbolSync.NormalizedLoopBandwidth = 0.03;
     symbolSync.DetectorGain = 1;
 
 %signal(isnan(signal)) = 0;
@@ -313,7 +315,7 @@ if diagnostics_on
     % symbols_to_drop isn't large enough.
     eye_traces = real(eye_traces(:, ((end-n_traces):1:(end-1))));
     figure(103);
-        plot(time(1:(k*sps))*1e9, real(eye_traces), '-', 'Color', [1, 1, 1, 0.1]);
+        plot(time(1:(k*sps))*1e9, real(eye_traces), '-', 'Color', [0, 0, 0, 0.1]);
         title(sprintf("%.1f Gbd %s Eye Diagram", symbol_rate/1e9, label));
         xlabel("Time (ns)");
         ylabel("Arbitrary Units");
