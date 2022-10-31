@@ -18,11 +18,22 @@ signal = captured_samples(:);
 % fc is the center frequency of the signal.
 original_symbol_frame = qamdemod(original_sample_frame, M);
 
+if debug
+    M
+    block_length
+    symbol_rate
+    fc
+    symbols_to_drop
+    rcf_rolloff
+    rate_samp
+end
+
 %% MIX WITH THE LOCAL OSCILLATOR
 % Create the time vector
 tmin = 0;
 tmax = tmin + (1/rate_samp)*(length(signal)-1);
 time_full = (tmin:(1/rate_samp):(tmax))';
+
 % Mix the signal
 signal = signal.*exp(1j*2*pi*fc*time_full);
 
@@ -77,7 +88,7 @@ safety = 1.1 + rcf_rolloff;
 rate_samp_min = (2*symbol_rate*safety);
 
 % Observe the Nyquist limit.
-sps_min = ceil(rate_samp_min/symbol_rate);
+sps_min = rate_samp_min/symbol_rate;
 sps = 2*ceil(sps_min/2); % SPS should be even.
 
 % NOTE: SPS should almost certianly be 4.
@@ -109,7 +120,7 @@ signal = signal/max(abs(signal));
 
 % Diagnostics
 if diagnostics_on
-    figure(100); clf; hold on; axis equal;
+    figure(100);
     title("Downsampled")
     plot(signal, '.', 'MarkerSize', 5);
     % plot(8*signal, '.', 'MarkerSize', 5);
