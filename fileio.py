@@ -5,18 +5,14 @@ import os
 # TODO: save only required number of bytes per sample
 
 def save_waveform(self, waveform, samp_rate, filepath):
-    if not position:
-        position = "static"
-    datafile = os.path.join(self.waveform_dir, f"{position}_{n}")
-
     version = 1
     ver = version.to_bytes(2, 'big')
     sample_rate = int(samp_rate).to_bytes(8, 'big')
     num_samples = len(waveform).to_bytes(8, 'big')
     data = array('i', waveform).tobytes()
 
-    print(f"Saving {num_samples} samples at {samp_rate} Samp/sec to file '{datafile}' using v{version} formatting")
-    with open(datafile, 'wb') as outp:
+    #print(f"Saving {num_samples} samples at {samp_rate} Samp/sec to file '{filepath}' using v{version} formatting")
+    with open(filepath, 'wb') as outp:
         outp.write(ver)
         outp.write(sample_rate)
         outp.write(num_samples)
