@@ -36,9 +36,7 @@ class WaveformProcessor:
         self.org_samples = wf_struct["samples"]
         self.sym_rate = wf_struct["symbol_rate"]
         self.rcf_rolloff = wf_struct["rcf_rolloff"]
-
-        # measured waveform center freq estimate
-        self.if_estimate = if_estimate
+        self.if_estimate = wf_struct["fc"] if if_estimate is None else if_estimate
         # throw away symbols corrupted by filter/PLL initilization
         self.sym2drop = 600.0
 

@@ -32,19 +32,22 @@ from waveform_analysis import WaveformProcessor
 
 # Global Variables
 date_time = datetime.datetime.now().strftime("%Y-%m-%dT%H%M%z")
-output_dir = "Data"
+
 
 # Various mode controls
 debug = True  # prints a whole lot of debug info
 
 
 def main():
-    test_series = ""
+    manual_phase_allignment = True # TODO: fix automatic phase peak code
+    source_directory = r"C:\Users\UTOL\Desktop\Waveforms"
+    test_series = "test1"
     description = ""  # optional
     capture_count = 5  # number of captures to save from the scope per source waveform
     if_estimate = ""  # TODO: is this necessary to save?
 
     # Create save destination
+    output_dir = os.path.dirname(source_directory)
     save_dir = os.path.join(output_dir, os.path.normpath(f"{test_series}_{date_time}"))
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
@@ -74,38 +77,35 @@ def main():
             f"Waveform IF estimate: {if_estimate}\n",
         ])
 
-    
-    # Generate source waveforms (if option is selected)
-    source_waveform_dir = os.path.join(save_dir, "source_waveforms")
-    if not os.path.exists(source_waveform_dir):
-        os.makedirs(source_waveform_dir)
-    # for [parameter]
-    # dump generated files in source_waveform_dir
-
-    #else select path to source waveforms
-
-
-    #created captured waveform directory
-    captured_waveform_dir = os.path.join(save_dir, "captured_waveforms")
-    if not os.path.exists(captured_waveform_dir):
-        os.makedirs(captured_waveform_dir)
-
-
+    firstrun = True
     #### Run the tests ####
     # Enable Signal Generators and then AWG output
     with psg1.enable_output(), psg2.enable_output(), awg.enable_output():
-        for file in os.listdir(source_waveform_dir):
+        for file in os.listdir(source_directory):
             if not file.endswith(".bin"):
                 continue
-            sourcefilepath = os.path.join(source_waveform_dir, file)
+            sourcefilepath = os.path.join(source_directory, file)
+
+            sample_rate = float(file.split("_")[2].replace("Gsps", ""))*1e9 #TODO: make this more robust
             
             awg.load_waveform(sourcefilepath, sample_rate)
+
+            if firstrun:
+                scope.do_command(":AUToscale:VERTical CHAN1")
+
+            if manual_phase_allignment and firstrun:
+                input("Peak phase manually. press any key to continue")
+                firstrun = False
+            elif not manual_phase_allignment:
+                twister_utils.peak_phase()
+
+            scope.view_n_segments(10)
 
             for n in range(1, capture_count+1):  # one-based index
                 data = scope.get_waveform_bytes(channels=1)
                 scope_sr = scope.get_sample_rate()
 
-                outfilepath = os.path.join(captured_waveform_dir, f"{file.replace('.bin', '')}_{n}")
+                outfilepath = os.path.join(save_dir, f"{file.replace('.bin', '')}_capture_{n}")
                 fileio.save_waveform(data, scope_sr, outfilepath)
 
 
