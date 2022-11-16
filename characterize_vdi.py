@@ -16,17 +16,12 @@ import os
 import sys
 import time
 
-import matplotlib.pyplot as plt
-import pickle
+from twister_api.oscilloscope_interface import Oscilloscope
+from twister_api.waveformgen_interface import WaveformGenerator
+from twister_api.signalgen_interface import SignalGenerator
+import twister_api.twister_utils as twister_utils
+import twister_api.fileio as fileio
 
-from oscilloscope_interface import Oscilloscope
-from waveformgen_interface import WaveformGenerator
-from signalgen_interface import SignalGenerator
-import twister_utils
-
-import fileio
-from plot import Custom_Plot
-from user_interface import UserSettings
 from waveform_analysis import WaveformProcessor
 
 
@@ -44,7 +39,6 @@ def main():
     test_series = "test1"
     description = ""  # optional
     capture_count = 5  # number of captures to save from the scope per source waveform
-    if_estimate = ""  # TODO: is this necessary to save?
 
     # Create save destination
     output_dir = os.path.dirname(source_directory)
@@ -74,7 +68,6 @@ def main():
             f"Test Series: {test_series}\n",
             f"Description: {description}\n",
             f"# captures per waveform: {capture_count}\n",
-            f"Waveform IF estimate: {if_estimate}\n",
         ])
 
     firstrun = True

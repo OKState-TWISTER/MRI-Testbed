@@ -9,7 +9,6 @@ https://www.mathworks.com/help/matlab/matlab_external/call-user-script-and-funct
 """
 
 import math
-from multiprocessing.sharedctypes import Value
 import os
 import sys
 from time import perf_counter as time
@@ -20,7 +19,7 @@ import matlab.engine
 
 
 class WaveformProcessor:
-    def __init__(self, if_estimate=None, debug=False, org_waveform=None):
+    def __init__(self, debug=False):
         self.debug = debug
         self.diagnostics = True
 
@@ -30,36 +29,9 @@ class WaveformProcessor:
         end = time()
         print(f"Done. Took {end - start} seconds.")
 
-        wf_struct, self.original_waveform = self.load_qam_waveform(org_waveform)
-        self.mod_order = wf_struct["modulation_order"]
-        self.block_length = wf_struct["block_length"]
-        self.org_samples = wf_struct["samples"]
-        self.sym_rate = wf_struct["symbol_rate"]
-        self.rcf_rolloff = wf_struct["rcf_rolloff"]
-        self.if_estimate = wf_struct["fc"] if if_estimate is None else if_estimate
-        # throw away symbols corrupted by filter/PLL initilization
-        self.sym2drop = 600.0
 
-    def load_qam_waveform(self, filepath=None):
-        while filepath is None:
-            print()
-            files = [file for file in os.listdir() if file.endswith(".mat")]
-            if not files:
-                print("Error: No valid source (.mat) files found. Exiting.")
-                raise FileNotFoundError("Error: No valid source (.mat) files found. Exiting.")
-            for idx, filename in enumerate(files):
-                print(f"{idx}: {filename}")
 
-            try:
-                index = int(input("Choose original waveform filename (enter number): "))
-                filepath = files[index]
-            except ValueError:
-                print("Please enter a value")
-            except IndexError:
-                print("Please enter a valid choice")
-            finally:
-                continue
-
+    def load_qam_waveform(self, filepath):
         if self.debug:
             print(f"Loading waveform file '{filepath}'")
 
@@ -77,16 +49,25 @@ class WaveformProcessor:
             print(f"\nError loading file '{filepath}'\n{e}\n")
             raise IOError(f"\nError loading file '{filepath}'\n{e}\n")
         
-        return (wf_struct, filepath)
+        self.mod_order = wf_struct["modulation_order"]
+        self.block_length = wf_struct["block_length"]
+        self.org_samples = wf_struct["samples"]
+        self.sym_rate = wf_struct["symbol_rate"]
+        self.rcf_rolloff = wf_struct["rcf_rolloff"]
+        self.if_estimate = wf_struct["fc"]
+        # throw away symbols corrupted by filter/PLL initilization
+        self.sym2drop = 600.0
+
+
 
     def process_qam(self, samp_rate, captured_samples):
+        """Returns: (SNR, nbits, biterr, nsyms, symerr)"""
+
         start = time()
         if self.debug:
             print("Begin processing waveform")
 
-        #captured_samples = [float(dat) for dat in captured_samples]
-
-        # function [data, nsym, errors, SNR] = processQAM(mod_order, block_length, sym_rate, IF_estimate, symbols_to_drop, rcf_rolloff, original_samples, samp_rate, captured_samples, diagnostics_on)
+        # function [data, nsym, errors, SNR] = processQAM(M, block_length, symbol_rate, fc, symbols_to_drop, rcf_rolloff, original_sample_frame, rate_samp, captured_samples, debug, diagnostics_on)
         mod_order = matlab.double(self.mod_order)
         block_length = matlab.double(self.block_length)
         symbol_rate = matlab.double(self.sym_rate)
@@ -127,36 +108,3 @@ class WaveformProcessor:
 
         # SNR, nbits, biterr, nsyms, symerr
         return (SNR, (nsym * math.log2(self.mod_order)), n_bit_errors, nsym, n_sym_errors)
-
-
-if __name__ == '__main__':
-    import matplotlib.pyplot as plt
-    from fileio import File_IO
-
-    # this is where waveform files are located
-    waveform_dir = r"C:\Users\kstreck\Desktop\BPSK_Variable_Baud_Data\Oscilloscope_Captures\8GBd_2022-10-03T1531_waveforms"
-    if_estimate = 12.5e9
-
-    fileio = File_IO(waveform_dir)
-
-    proc = WaveformProcessor(if_estimate=if_estimate, debug=True)
-
-    for filename in os.listdir(waveform_dir):
-        path = os.path.join(waveform_dir, filename)
-
-        (samp_rate, samp_count, samples) = fileio.load_waveform(path)
-        
-        plt.figure(1)
-        plt.plot(samples[:500])
-        plt.title("captured waveform (first 500 samples)")
-
-        proc.process_qam(samp_rate, samples)
-
-        break
-
-    input()
-
-#import pickle
-    #with open('saved_waveform.pkl', 'wb') as outp:
-    #    pickle.dump(waveform, outp, pickle.HIGHEST_PROTOCOL)
-    #    pickle.dump(samp_rate, outp, pickle.HIGHEST_PROTOCOL)

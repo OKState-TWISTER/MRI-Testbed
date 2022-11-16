@@ -46,7 +46,11 @@ time_full = (tmin:(1/rate_samp):(tmax))';
 % Mix the signal
 signal = signal.*exp(1j*2*pi*fc*time_full);
 
+%phase_error = angle(signal(1));
+%signal = signal.*exp(-1j*(phase_error + pi/4));  % !!!!!!!!  Assumes pi/4 offset!
+
 %% FILTER OUT THE 2x FREQUENCY COMPONENT via RRCF
+
 signal_I = real(signal);
 signal_Q = imag(signal);
 
@@ -71,6 +75,8 @@ spectrum_Q = spectrum_Q.*(s_rrcf);
 
 % Recombine I and Q channels
 signal = signal_I + 1j*signal_Q;
+%}
+
 
 if diagnostics_on
     figure(100); clf; hold on; axis equal;
@@ -100,6 +106,7 @@ rate_samp_min = (2*symbol_rate*safety);
 sps_min = rate_samp_min/symbol_rate;
 sps = 2*ceil(sps_min/2); % SPS should be even.
 
+
 % NOTE: SPS should almost certianly be 4.
 
 
@@ -114,11 +121,6 @@ time = (0:(1/rate_samp):tmax)';
 % Downsample by interpolation
 signal = interp1(time_full, signal, time, 'spline');
 
-
-%% MIX WITH THE LOCAL OSCILLATOR
-% Mix the signal
-%signal = signal.*exp(1j*2*pi*fc*time);
-%}
 
 % Diagnostics
 if diagnostics_on
@@ -196,7 +198,7 @@ coarseFrequencyComp = comm.CoarseFrequencyCompensator;
     % coarseFrequencyComp.Algorithm = 'FFT-based';
     % Use Correlation-based for HDL implementation, but see documentation
     % first.
-    coarseFrequencyComp.FrequencyResolution = 10e4; % Hz
+    coarseFrequencyComp.FrequencyResolution = 10e3; % Hz
     %coarseFrequencyComp.MaximumFrequencyOffset = 10e3; % Hz
     coarseFrequencyComp.SampleRate = rate_samp; % Hz
     %coarseFrequencyComp.SamplesPerSymbol = sps; % Hz, for OQPSK only
@@ -215,9 +217,48 @@ if diagnostics_on
     axis equal;
 end
 
+%% FINE FREQUENCY COMPENSATOR (first round)
+% (Performs Carrier Synchronization and removes phase offset)
+
+modtype = "QAM";
+if M == 2
+    modtype = "BPSK";
+elseif M == 4
+    modtype = "QPSK";
+end
+
+carrSync = comm.CarrierSynchronizer;
+    carrSync.Modulation = modtype;
+    carrSync.ModulationPhaseOffset = 'Auto';
+    %carrSync.CustomPhaseOffset = 0;
+    carrSync.SamplesPerSymbol = sps;
+    carrSync.DampingFactor = 10;
+    carrSync.NormalizedLoopBandwidth = 0.05; % 0.01
+
+    
+[signal, error_phase] = carrSync(signal);
+
 
 %% TIMING RECOVERY
 % (Symbol Synchronization)
+% Zero-crossing method — The zero-crossing method is a decision-directed 
+% technique that requires 2 samples per symbol at the input to the 
+% synchronizer. It is used in low-SNR conditions for all values of excess 
+% bandwidth and in moderate-SNR conditions for moderate excess bandwidth 
+% factors in the approximate range [0.4, 0.6].
+% Mueller-Muller method — The Mueller-Muller method is a decision-directed 
+% feedback method that requires prior recovery of the carrier phase. When 
+% the input signal has Nyquist pulses (for example, when using a raised 
+% cosine filter), the Mueller-Muller method has no self noise. For 
+% narrowband signaling in the presence of noise, the performance of the 
+% Mueller-Muller method improves as the excess bandwidth factor of the 
+% pulse decreases.
+% Because the decision-directed methods (zero-crossing and Mueller-Muller) 
+% estimate timing error based on the sign of the in-phase and quadrature 
+% components of signals passed to the synchronizer, they are not 
+% recommended for constellations that have points with either a zero 
+% in-phase or a quadrature component.
+
 symbolSync = comm.SymbolSynchronizer;
     symbolSync.Modulation = 'PAM/PSK/QAM';
     symbolSync.TimingErrorDetector = 'Zero-Crossing (decision-directed)';
@@ -262,6 +303,9 @@ end
 
 %% FINE FREQUENCY COMPENSATOR
 % (Performs Carrier Synchronization)
+% For efficiency, this probably needs to be rewritted and reworked.  I
+% already have a FFC earlier on; having the same things here is redundant
+% and only exists for eye diagrams.
 modtype = "QAM";
 if M == 2
     modtype = "BPSK";
@@ -341,7 +385,7 @@ if diagnostics_on
         plot(time_samples_full - 4/rate_samp, real(signal), 'x', 'MarkerSize', 5);
         plot(time_samples_full - 4/rate_samp, imag(signal), 'x', 'MarkerSize', 5);
 end
-
+%}
 
 %% SCALE AND TRUNCATE THE PROCESSED WAVEFORM
 
