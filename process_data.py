@@ -15,12 +15,12 @@ import threading
 
 
 # this is where the captured waveform files are located
-waveform_dir = r"C:\Users\kstreck\Desktop\test1_2022-11-18T1350"
+waveform_dir = r"C:\Users\kstreck\Desktop\cable_test_long_2022-11-30T1235"
 
 # this is where the matlab source files are located
 original_waveform_dir = r"C:\Users\kstreck\Desktop\Waveforms"
 
-output_file = os.path.join(waveform_dir, "trash_results.csv")
+output_file = os.path.join(r"C:\Users\kstreck\Desktop", "cable_test_long_results.csv")
 
 all_data = {}
 
@@ -45,10 +45,10 @@ def worker():
 
         proc.load_qam_waveform(sourcepath)
         samp_rate, samp_count, samples = fileio.load_waveform(filepath)
-        SNR, nbits, biterr, nsyms, symerr = proc.process_qam(samp_rate, samples)
+        SNR_raw, SNR_est, nbits, biterr, nsyms, symerr = proc.process_qam(samp_rate, samples)
 
         # This could be unsafe with multithreaded processes?!?  Check this!
-        all_data.update({str(filepath) : (SNR, nbits, biterr, nsyms, symerr)})
+        all_data.update({str(filepath) : (SNR_raw, SNR_est, nbits, biterr, nsyms, symerr)})
 
         proc_q.put(proc)
         #print(q.qsize())
@@ -69,6 +69,7 @@ def stop_workers(threads):
     # stop workers
     for i in threads:
         q.put(None)
+        
     for t in threads:
         t.join()
 
@@ -102,7 +103,7 @@ def main():
     stop_workers(workers)
 
     # Print the results to file
-    headerlist = ["SNR", "nbits", "biterr", "nsyms", "symerr"]
+    headerlist = ["SNR_raw", "SNR_est", "nbits", "biterr", "nsyms", "symerr"]
     pandas.DataFrame.from_dict(data=all_data, orient='index').to_csv(output_file, header=headerlist)
     end = time()
     print(f"processing test data took: {end - start:.2f} seconds")

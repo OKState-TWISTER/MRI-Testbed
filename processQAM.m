@@ -1,10 +1,10 @@
-function [data, nsym, errors, SNR] = processQAM(M, block_length, symbol_rate, fc, symbols_to_drop, rcf_rolloff, original_sample_frame, rate_samp, captured_samples, debug, diagnostics_on)
+function [data, nsym, errors, SNR_est, SNR_raw] = processQAM(M, block_length, symbol_rate, fc, symbols_to_drop, rcf_rolloff, original_sample_frame, rate_samp, captured_samples, debug, diagnostics_on)
 % processQAM decodes the QAM waveform contained in the structure waveform.
 % waveform contains all previously-loaded data and settings.
 
-%fprintf("\nDEBUG and DIAGNOSTICS are hard-coded on in processQAM.m!\n");
-%diagnostics_on = 1;
-%debug = 1;
+fprintf("DEBUG and DIAGNOSTICS are hard-coded OFF in processQAM.m!\n");
+diagnostics_on = 0;
+debug = 0;
 
 %% EXTRACT SETTINGS FROM THE STRUCTURE
 % Set these parameters correctly before running the script.
@@ -14,6 +14,12 @@ function [data, nsym, errors, SNR] = processQAM(M, block_length, symbol_rate, fc
 %block_length = block_length; % number of symbols per marker frame.
 % symbol rate is the number of symbols per second
 signal = captured_samples(:);
+
+% Create the time vector
+tmin = 0;
+tmax = tmin + (1/rate_samp)*(length(signal)-1);
+time_full = (tmin:(1/rate_samp):(tmax))';
+
 % rate_samp is the oscilloscope sample rate.
 % fc is the center frequency of the signal.
 original_symbol_frame = qamdemod(original_sample_frame, M);
@@ -30,6 +36,7 @@ if debug
     %}
 end
 
+
 % Make the time-domain waveform zero-mean
 signal = signal - mean(signal);
 
@@ -37,14 +44,45 @@ signal = signal - mean(signal);
 %signal = signal/mean(abs(signal));
 signal = signal/(sqrt(mean(abs(signal.^2))));
 
-%% MIX WITH THE LOCAL OSCILLATOR
-% Create the time vector
-tmin = 0;
-tmax = tmin + (1/rate_samp)*(length(signal)-1);
-time_full = (tmin:(1/rate_samp):(tmax))';
+%% DIRECTLY CALCULATE SNR
+%if diagnostics_on
+    [f, S] = singfourSAFE(time_full, signal);
+    S = abs(S);
 
+    % Remove DC and 1/f (shouldn't be necessary, but doesn't hurt)
+    filt = (f > 0.5e9);
+    S = S(filt); f = f(filt);
+
+    filt = rrcf(f, fc, symbol_rate, rcf_rolloff);
+    finv = filt <= 1e-5; % Stuff well outside the filter bandwidth should be noise.
+    fwhm = filt > 0.6;
+
+    S_filt = S.*filt;  % Filtered signal.
+    meansigpow = mean(abs(S_filt(fwhm)));
+
+    noise = repmat(S(finv), [ceil(length(S)/sum(finv)), 1]);
+    noise = noise(1:length(S)); % Representative noise vector.
+    meannoisepow = mean(abs(noise));
+
+    %noise_filt = noise.*filt; % Filtered noise
+    %meannoisepowfilt = mean(abs(noise_filt(fwhm)));
+
+    %SNR2 = 10*log10(RMSsigPower/RMSfiltNoisePower)
+    %SNR3 = 10*log10((PSDsig - PSDfiltNoise)/PSDfiltNoise)
+    %SNR4 = 10*log10((PSDsig - PSDnoise)/PSDfiltNoise)
+    SNR_raw = 40*log10((sqrt(meansigpow.^2 - 0))/meannoisepow);
+
+    %SNR = mean([SNR2, SNR3, SNR4])
+
+    %figure(45); plot(f, 20*log10(abs(S_filt)), f, 20*log10(abs(noise_filt)))
+%end
+
+
+
+%% MIX THE SIGNAL WITH A LOCAL OSCILLATOR
 % Mix the signal
 signal = signal.*exp(1j*2*pi*fc*time_full);
+%signal_before_filtering = signal;
 
 %phase_error = angle(signal(1));
 %signal = signal.*exp(-1j*(phase_error + pi/4));  % !!!!!!!!  Assumes pi/4 offset!
@@ -76,6 +114,20 @@ spectrum_Q = spectrum_Q.*(s_rrcf);
 % Recombine I and Q channels
 signal = signal_I + 1j*signal_Q;
 %}
+
+%% SNR
+%signal_after_filtering = signal;
+
+%noise = signal_before_filtering - signal_after_filtering;
+%sigPower = sum(abs(signal_after_filtering(:)).^2)/numel(signal_after_filtering);
+%noisePower = sum(abs(noise(:)).^2)/numel(noise);
+%SNR = 10*log10(sigPower/noisePower)
+
+%figure(52154); clf; hold on;
+%plot(abs(noise));
+%plot(abs(signal_before_filtering));
+%plot(abs(signal_after_filtering));
+
 
 
 if diagnostics_on
@@ -387,6 +439,67 @@ if diagnostics_on
 end
 %}
 
+
+%% Equilization
+%chtaps = [1, 0.5*exp(1i*pi/6), 0.1*exp(-1i*pi/8)];
+%samples = filter(chtaps,1,samples);
+%{
+ref_const = qammod((1:M)-1, M);
+%ref_const = ref_const / mean(abs(ref_const));
+
+InitialWeights = [...
+  -0.1031 + 0.0115i
+  -0.5514 + 0.1309i
+  -0.6893 + 0.1709i
+   0.0607 - 0.0134i
+   0.2009 - 0.0548i
+   0.0568 - 0.0064i
+   0.0602 - 0.0032i
+  -0.0013 - 0.0004i];
+
+dfe = comm.DecisionFeedbackEqualizer(...
+    'Algorithm', 'LMS', ...
+    'AdaptAfterTraining', 1);
+    %dfe.InitialWeights = InitialWeights;
+    dfe.Algorithm = 'LMS'; % LMS, RLS, or CMA.
+    dfe.NumForwardTaps = 50;
+    dfe.NumFeedbackTaps = 30;
+    dfe.StepSize = 0.1;
+    %dfe.ForgettingFactor = 0.99;
+    %dfe.InitialInverseCorrelationMatrix = 0.1;
+    dfe.Constellation = ref_const;
+    dfe.ReferenceTap = 20;
+    dfe.InputDelay = 0;
+    dfe.InputSamplesPerSymbol = 1;
+    %dfe.AdaptAfterTraining = 0;
+    %dfe.AdaptWeights = 0;
+    dfe.WeightUpdatePeriod = 10000;
+
+%maxstep(dfe,signal)
+
+[signal, err, weights] = dfe(signal(:), repmat(original_sample_frame(:), 10,1));
+weights
+abs(weights)
+
+if diagnostics_on
+    %fprintf('Equilization\n');
+    
+    % Main plot
+    figure(100);
+    title("Equilization")
+    plot(signal, '.', 'MarkerSize', 1);
+    axis equal;
+    
+    % Timing error
+    figure(120); clf; hold on;
+        plot(time_samples_full,real(err), time_samples_full,imag(err),'.');
+        title('Symbol Timing Error (timing recovery)');
+        xlabel('Time (s)');
+        ylabel('Timing Error (samples)');
+
+end
+%}
+
 %% SCALE AND TRUNCATE THE PROCESSED WAVEFORM
 
 % Scaling
@@ -404,7 +517,7 @@ n_frames = floor((time_samples_full(end)-time_samples_full(1))/t_frame);
 
 % Duplicate the original symbol vector to match measured sample dimensions.
 original_symbols = repmat(original_symbol_frame, n_frames, 1);
-original_sample_frame = repmat(original_sample_frame, n_frames, 1);
+original_sample_frame_extended = repmat(original_sample_frame, n_frames, 1);
 
 % Create symbol time vector (subset of the full-length symbol-time vector)
 time_samples = time_samples_full(1:(block_length*n_frames));
@@ -498,19 +611,19 @@ symbols = circshift(symbols, shift_ideal);
 % The difference between the two is noise (assuming correct scaling).
 
 samp_meas = samples/mean(abs(samples));
-samp_orig = original_sample_frame/mean(abs(original_sample_frame));
+samp_orig = original_sample_frame_extended/mean(abs(original_sample_frame_extended));
 
 % Contains both noise and ISI
 % Get the VOLTAGE SIGNAL noise (not power).
 noise_voltage = (samp_meas - samp_orig);
 
 % Get the SNR, in dB.  Takes voltages as inputs, not powers.
-SNR = snr(samp_orig, noise_voltage);
+SNR_est = snr(samp_orig, noise_voltage);
 
 if diagnostics_on
     % Show noise on a constellation diagram
     figure(105); clf; hold on;
-    plot(awgn(samp_orig + j*eps, SNR), '.');
+    plot(awgn(samp_orig + j*eps, SNR_est), '.');
     plot(samp_meas + j*eps, '.');
     plot(samp_orig + j*eps, '+');
     title("Noise Comparison Constellation");
@@ -520,7 +633,7 @@ if diagnostics_on
     % Show noise spectrum
     figure(106); clf; hold on;
     [f, s_n_meas] = singfourSAFE(time_samples, noise_voltage.^2);
-    [~, s_n_awgn] = singfourSAFE(time_samples, (awgn(samp_orig, SNR) - samp_orig).^2);
+    [~, s_n_awgn] = singfourSAFE(time_samples, (awgn(samp_orig, SNR_est) - samp_orig).^2);
     plot(f, abs(s_n_meas), f, abs(s_n_awgn));
     title("Noise Power Spectrum");
     xlabel("Frequency (Hz)");
