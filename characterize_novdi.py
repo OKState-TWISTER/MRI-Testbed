@@ -18,8 +18,6 @@ import time
 
 from twister_api.oscilloscope_interface import Oscilloscope
 from twister_api.waveformgen_interface import WaveformGenerator
-from twister_api.signalgen_interface import SignalGenerator
-import twister_api.twister_utils as twister_utils
 import twister_api.fileio as fileio
 
 from waveform_analysis import WaveformProcessor
@@ -36,7 +34,7 @@ debug = True  # prints a whole lot of debug info
 def main():
     manual_phase_allignment = True # TODO: fix automatic phase peak code
     source_directory = r"C:\Users\UTOL\Desktop\Waveforms_short"
-    test_series = "cable_test"
+    test_series = "cable_test_short"
     description = ""  # optional
     capture_count = 1  # number of captures to save from the scope per source waveform
 
@@ -50,16 +48,6 @@ def main():
     # Initialize Instruments
     scope = Oscilloscope(debug=debug)
     awg = WaveformGenerator(debug=debug)
-    psg1 = SignalGenerator(1, debug=debug)
-    psg2 = SignalGenerator(2, debug=debug)
-
-    while True:
-        response = input("Are the VDI modules powered on? (y/N): ")
-        if response.lower() == "y":
-            break
-        else:
-            print("Please ensure the VDI modules are powered on before enabling the LO and AWG outputs.\n")
-
 
 
     info_fp = os.path.join(save_dir, "info.txt")
@@ -74,7 +62,7 @@ def main():
     #### Run the tests ####
     # Enable Signal Generators and then AWG output
     awg.enable_output() # this should throw an error  TODO: FIX!!!!!!!!!!!!!!!!!!
-    with psg1.enable_output(), psg2.enable_output(), awg.enable_output():
+    with awg.enable_output():
         for file in os.listdir(source_directory):
             if not file.endswith(".bin"):
                 continue
@@ -87,13 +75,7 @@ def main():
             if firstrun:
                 scope.do_command(":AUToscale:VERTical CHAN1")
 
-            if manual_phase_allignment and firstrun:
-                input("Peak phase manually. press any key to continue")
-                firstrun = False
-            elif not manual_phase_allignment:
-                twister_utils.peak_phase()
-
-            scope.view_n_segments(1000)
+            scope.view_n_segments(100)
 
             for n in range(1, capture_count+1):  # one-based index
                 data = scope.get_waveform_bytes(channels=1)
