@@ -79,7 +79,7 @@ class WaveformProcessor:
 
         samp_rate = matlab.double(samp_rate)
 
-        data, nsym, errors, SNR_est, SNR_raw = self.eng.processQAM2(mod_order, block_length, symbol_rate, if_estimate,
+        data, nsym, errors, SNR_est, SNR_raw = self.eng.processQAM(mod_order, block_length, symbol_rate, if_estimate,
                                                       sym2drop, rcf_rolloff, original_samples, samp_rate, 
                                                       captured_samples, self.debug, self.diagnostics, nargout=5)
 
