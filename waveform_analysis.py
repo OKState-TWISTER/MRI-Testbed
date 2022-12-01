@@ -56,12 +56,12 @@ class WaveformProcessor:
         self.rcf_rolloff = wf_struct["rcf_rolloff"]
         self.if_estimate = wf_struct["fc"]
         # throw away symbols corrupted by filter/PLL initilization
-        self.sym2drop = 600.0
+        self.sym2drop = 1000
 
 
 
     def process_qam(self, samp_rate, captured_samples):
-        """Returns: (SNR, nbits, biterr, nsyms, symerr)"""
+        """Returns: (SNR_raw, SNR_est, nbits, biterr, nsyms, symerr)"""
 
         start = time()
         if self.debug:
@@ -79,9 +79,9 @@ class WaveformProcessor:
 
         samp_rate = matlab.double(samp_rate)
 
-        data, nsym, errors, SNR = self.eng.processQAM(mod_order, block_length, symbol_rate, if_estimate,
+        data, nsym, errors, SNR_est, SNR_raw = self.eng.processQAM2(mod_order, block_length, symbol_rate, if_estimate,
                                                       sym2drop, rcf_rolloff, original_samples, samp_rate, 
-                                                      captured_samples, self.debug, self.diagnostics, nargout=4)
+                                                      captured_samples, self.debug, self.diagnostics, nargout=5)
 
         end = time()
         if self.debug:
@@ -91,7 +91,7 @@ class WaveformProcessor:
         # The assumption of Gaussian noise may not always be correct, so verify.
         # NOTE:  For QPSK only.
         # SER_theory = erfc(sqrt(0.5*(10.^(SNR/10)))) - (1/4)*(erfc(sqrt(0.5*(10.^(SNR/10))))).^2; # original
-        SER_theory = self.eng.erfc(math.sqrt(0.5 * (10 ** (SNR / 10)))) - (1 / 4) * (self.eng.erfc(math.sqrt(0.5 * (10 ** (SNR / 10))))) ** 2
+        SER_theory = self.eng.erfc(math.sqrt(0.5 * (10 ** (SNR_est / 10)))) - (1 / 4) * (self.eng.erfc(math.sqrt(0.5 * (10 ** (SNR_est / 10))))) ** 2
 
         n_bit_errors = errors["bit"]
         BER = n_bit_errors / (nsym * math.log2(self.mod_order))
@@ -100,11 +100,12 @@ class WaveformProcessor:
 
         if self.debug:
             print(f"\nAnalyzing {nsym} symbols:\n")
-            print(f"SNR is {SNR} dB\n")
+            print(f"Raw SNR is {SNR_raw} dB\n")
+            print(f"Estimated SNR is {SNR_est} dB\n")
             print(f"Observed BER is {BER} ({n_bit_errors} bits)\n")
             print(f"Observed SER is {SER} ({n_sym_errors} symbols)\n")
             # For QPSK only:
             # print(f"Predicted QPSK SER is {SER_theory} ({round(SER_theory*nsym)} symbols)\n")
 
         # SNR, nbits, biterr, nsyms, symerr
-        return (SNR, (nsym * math.log2(self.mod_order)), n_bit_errors, nsym, n_sym_errors)
+        return (SNR_raw, SNR_est, (nsym * math.log2(self.mod_order)), n_bit_errors, nsym, n_sym_errors)
