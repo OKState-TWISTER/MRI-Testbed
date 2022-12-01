@@ -38,16 +38,15 @@ def main():
     description = ""  # optional
     capture_count = 1  # number of captures to save from the scope per source waveform
 
+    # Initialize Instruments
+    scope = Oscilloscope(debug=debug)
+    awg = WaveformGenerator(debug=debug)
+
     # Create save destination
     output_dir = os.path.dirname(source_directory)
     save_dir = os.path.join(output_dir, os.path.normpath(f"{test_series}_{date_time}"))
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
-
-
-    # Initialize Instruments
-    scope = Oscilloscope(debug=debug)
-    awg = WaveformGenerator(debug=debug)
 
 
     info_fp = os.path.join(save_dir, "info.txt")

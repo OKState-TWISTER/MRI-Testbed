@@ -40,18 +40,17 @@ def main():
     description = ""  # optional
     capture_count = 1  # number of captures to save from the scope per source waveform
 
-    # Create save destination
-    output_dir = os.path.dirname(source_directory)
-    save_dir = os.path.join(output_dir, os.path.normpath(f"{test_series}_{date_time}"))
-    if not os.path.exists(save_dir):
-        os.makedirs(save_dir)
-
-
     # Initialize Instruments
     scope = Oscilloscope(debug=debug)
     awg = WaveformGenerator(debug=debug)
     psg1 = SignalGenerator(1, debug=debug)
     psg2 = SignalGenerator(2, debug=debug)
+
+    # Create save destination
+    output_dir = os.path.dirname(source_directory)
+    save_dir = os.path.join(output_dir, os.path.normpath(f"{test_series}_{date_time}"))
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
 
     while True:
         response = input("Are the VDI modules powered on? (y/N): ")
