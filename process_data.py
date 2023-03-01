@@ -15,12 +15,13 @@ import threading
 
 
 # this is where the captured waveform files are located
-waveform_dir = r"C:\Users\kstreck\Desktop\cable_test_long_2022-11-30T1235"
+#waveform_dir = r"E:\cable_test_long_v2_2022-12-05T1033"
+waveform_dir = r"E:\waveforms_to_run"
 
 # this is where the matlab source files are located
 original_waveform_dir = r"C:\Users\kstreck\Desktop\Waveforms"
 
-output_file = os.path.join(r"C:\Users\kstreck\Desktop", "cable_test_long_results.csv")
+output_file = os.path.join(r"C:\Users\kstreck\Desktop", "cable_test_long_v2_eq_results.csv")
 
 all_data = {}
 
@@ -48,7 +49,7 @@ def worker():
         SNR_raw, SNR_est, nbits, biterr, nsyms, symerr = proc.process_qam(samp_rate, samples)
 
         # This could be unsafe with multithreaded processes?!?  Check this!
-        all_data.update({str(filepath) : (SNR_raw, SNR_est, nbits, biterr, nsyms, symerr)})
+        all_data.update({str(file) : (SNR_raw, SNR_est, nbits, biterr, nsyms, symerr)})
 
         proc_q.put(proc)
         #print(q.qsize())
@@ -61,7 +62,7 @@ def start_workers(worker_pool=4):
         t = threading.Thread(target=worker)
         t.start()
         threads.append(t)
-        proc_q.put(WaveformProcessor(debug=False))
+        proc_q.put(WaveformProcessor(debug=True))
     return threads
 
 

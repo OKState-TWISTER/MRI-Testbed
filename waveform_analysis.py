@@ -57,6 +57,8 @@ class WaveformProcessor:
         self.if_estimate = wf_struct["fc"]
         # throw away symbols corrupted by filter/PLL initilization
         self.sym2drop = 1000
+        root, file = os.path.split(filepath)
+        self.filename = file
 
 
 
@@ -76,13 +78,18 @@ class WaveformProcessor:
         rcf_rolloff = matlab.double(self.rcf_rolloff)
         original_samples = self.org_samples
         captured_samples = matlab.double(captured_samples)
+        filename = self.filename
+
 
         samp_rate = matlab.double(samp_rate)
 
-        data, nsym, errors, SNR_est, SNR_raw = self.eng.processQAM(mod_order, block_length, symbol_rate, if_estimate,
-                                                      sym2drop, rcf_rolloff, original_samples, samp_rate, 
-                                                      captured_samples, self.debug, self.diagnostics, nargout=5)
+        #data, nsym, errors, SNR_est, SNR_raw = self.eng.saveFileAsMatlab(filename, mod_order, block_length, symbol_rate, if_estimate,
+        #                                              sym2drop, rcf_rolloff, original_samples, samp_rate, 
+        #                                              captured_samples, self.diagnostics, False, nargout=5)
 
+        data, nsym, errors, SNR_est, SNR_raw, weights = self.eng.processQAM6(mod_order, block_length, symbol_rate, if_estimate,
+                                                      rcf_rolloff, original_samples, samp_rate, 
+                                                      captured_samples, False, True, nargout=6)
         end = time()
         if self.debug:
             print(f"Done. Took {end - start} seconds.")
@@ -91,7 +98,7 @@ class WaveformProcessor:
         # The assumption of Gaussian noise may not always be correct, so verify.
         # NOTE:  For QPSK only.
         # SER_theory = erfc(sqrt(0.5*(10.^(SNR/10)))) - (1/4)*(erfc(sqrt(0.5*(10.^(SNR/10))))).^2; # original
-        SER_theory = self.eng.erfc(math.sqrt(0.5 * (10 ** (SNR_est / 10)))) - (1 / 4) * (self.eng.erfc(math.sqrt(0.5 * (10 ** (SNR_est / 10))))) ** 2
+        # SER_theory = self.eng.erfc(math.sqrt(0.5 * (10 ** (SNR_est / 10)))) - (1 / 4) * (self.eng.erfc(math.sqrt(0.5 * (10 ** (SNR_est / 10))))) ** 2
 
         n_bit_errors = errors["bit"]
         BER = n_bit_errors / (nsym * math.log2(self.mod_order))
@@ -99,11 +106,11 @@ class WaveformProcessor:
         SER = n_sym_errors / nsym
 
         if self.debug:
-            print(f"\nAnalyzing {nsym} symbols:\n")
-            print(f"Raw SNR is {SNR_raw} dB\n")
-            print(f"Estimated SNR is {SNR_est} dB\n")
-            print(f"Observed BER is {BER} ({n_bit_errors} bits)\n")
-            print(f"Observed SER is {SER} ({n_sym_errors} symbols)\n")
+            print(f"\nAnalyzing {nsym} symbols:")
+            print(f"Raw SNR is {SNR_raw} dB")
+            print(f"Estimated SNR is {SNR_est} dB")
+            print(f"Observed BER is {BER} ({n_bit_errors} bits)")
+            print(f"Observed SER is {SER} ({n_sym_errors} symbols)")
             # For QPSK only:
             # print(f"Predicted QPSK SER is {SER_theory} ({round(SER_theory*nsym)} symbols)\n")
 
