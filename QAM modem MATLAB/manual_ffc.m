@@ -87,7 +87,7 @@ function out = manual_ffc(in, order, topn, M, block)
 
     % BAD BAD I DON"T LIKE IT.  FIX ME!
     %phase_error = rad2deg(unwrap(deg2rad(phase_error)*50))/50;
-    phase_error = customUnwrap2(phase_error, 90);
+    phase_error = customUnwrap(phase_error, 90);
     
     n = linspace(-1, 1, numel(phase_error));
 
