@@ -1,4 +1,4 @@
-function [data, nsym, errors, SNR_est, SNR_raw, weights] = processQAM(M, block_length, symbol_rate, fc, rcf_rolloff, original_sample_frame, rate_samp, captured_samples, diagnostics_on, eq_on)
+function [data, nsym, errors, SNR_est, SNR_raw, weights] = processQAM(M, block_length, symbol_rate, fc, rcf_rolloff, original_sample_frame, rate_samp, captured_samples, diagnostics_on, dfe)
 % Updated to use verified fourier transforms
 
 weights = 1;  % If the EQ is used, it will populate this placeholder.
@@ -122,7 +122,7 @@ end
 % Calculate samples per symbol, and force it do be an integer.
 % (An integer SPS is required by communication toolbox system objects)
 % Different RCF rolloffs have varrying excess bandwidth.
-excess_bw = 1.1 + rcf_rolloff; % Excess bandwidth is 1+beta, but use 1.1 for safety.
+excess_bw = 1 + rcf_rolloff; % Excess bandwidth is 1+beta, but use 1.1 for safety.
 rate_samp_min = (2*symbol_rate*excess_bw);
 
 % Observe the Nyquist limit.
@@ -284,7 +284,7 @@ end
 % be able to get a better alignment.
 % This would also be performed by the equalizer, but we handle it here
 % since the EQ may not be used.
-order = 1; % Linear fit to frequency drift.
+order = 1; % Only remove rotation (0 order)
 topn = 1000;
 samples = manual_ffc(samples, order, topn, M, chunk);
 
@@ -355,23 +355,30 @@ samples = samples(idx_start:end);
 % coefficients, and have the equalizer use those instead of training.  The
 % purpose of this is to be able to de-embed effects of cables, etc, and
 % observe only the effects of dispersion.
-
-if eq_on
+if isa(dfe, 'double')
+    if numel(dfe) == 1
+        % No equalization; pass
+    else
+        % Convolve dfe and the data
+        weights = dfe;
+        
+        pad = zeros(numel(dfe), 1);
+        samples = [pad; samples; pad];
+        samples = circshift(filter((dfe),1,samples), -numel(dfe)); % Has padding on both ends.
+        samples = samples((numel(dfe)+1):(end-numel(dfe)));  %Remove the padding
+    end
+elseif isa(dfe, 'comm.DecisionFeedbackEqualizer')
     samples = samples/mean(abs(samples));
-    dfe = comm.DecisionFeedbackEqualizer('Algorithm','LMS', ...
-    'NumForwardTaps',30,'NumFeedbackTaps',5,'StepSize',0.03);
-    dfe.ReferenceTap = 3;
-    dfe.Constellation = qammod((1:M)-1, M) + 1j*eps;
-
     [samples, err, weights] = dfe(samples(:), header_samp);
 
-    % Remove equalizer start-up stuff
-    %drop = 3*(dfe.NumForwardTaps + dfe.NumFeedbackTaps);
-    drop = 300;
-    samples = samples(drop:end);
-    %samples = circshift(samples, -(dfe.ReferenceTap-1));
-
 end
+
+% Remove equalizer start-up stuff
+%drop = 3*(dfe.NumForwardTaps + dfe.NumFeedbackTaps);
+drop = 300;
+samples = samples(drop:end);
+%samples = circshift(samples, -(dfe.ReferenceTap-1));
+
 samples = samples / mean(abs(samples));
 
 
@@ -518,5 +525,10 @@ if diagnostics_on
     xlabel("Time (s)");
     legend("Real Part", "Imaginary Part");
 end
+
+ir = -ir;
+ir(1) = 1 + i*imag(ir(1));
+ir = [ir(1:6); ir((end-(6-2)):end)];
+ir = fftshift(ir)
 
 end
